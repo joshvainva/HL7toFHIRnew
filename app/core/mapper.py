@@ -9,6 +9,12 @@ from app.converters.base import build_bundle
 from app.converters.adt import ADTConverter
 from app.converters.oru import ORUConverter
 from app.converters.orm import ORMConverter
+from app.converters.siu import SIUConverter
+from app.converters.mdm import MDMConverter
+from app.converters.dft import DFTConverter
+from app.converters.vxu import VXUConverter
+from app.converters.mfn import MFNConverter
+from app.converters.ack import ACKConverter
 from app.converters.generic import GenericConverter
 
 
@@ -17,10 +23,13 @@ CONVERTER_REGISTRY: Dict[str, Any] = {
     "ADT": ADTConverter,
     "ORU": ORUConverter,
     "ORM": ORMConverter,
+    "SIU": SIUConverter,
+    "MDM": MDMConverter,
+    "DFT": DFTConverter,
+    "VXU": VXUConverter,
+    "MFN": MFNConverter,
+    "ACK": ACKConverter,
     # More converters can be registered here
-    # "MDM": MDMConverter,
-    # "SIU": SIUConverter,
-    # "VXU": VXUConverter,
 }
 
 

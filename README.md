@@ -6,9 +6,9 @@ A production-ready web application that converts **HL7 v2.x** messages into **FH
 
 | Feature | Details |
 |---|---|
-| **HL7 Detection** | Auto-detects version (2.3–2.8+) and message type (ADT, ORU, ORM, and more) |
+| **HL7 Detection** | Auto-detects version (2.3–2.8+) and message type (ADT, ORU, ORM, SIU, MDM, DFT, VXU, MFN, ACK) |
 | **FHIR Output** | Produces FHIR R4 Bundle with proper references and IDs |
-| **Supported Types** | ADT→Patient/Encounter/Practitioner, ORU→Observation/DiagnosticReport, ORM→ServiceRequest |
+| **Supported Types** | ADT→Patient/Encounter/Practitioner, ORU→Observation/DiagnosticReport, ORM→ServiceRequest, SIU→Appointment/Patient, MDM→DocumentReference, DFT→Claim, VXU→Immunization, MFN→Organization/Practitioner/Location, ACK→OperationOutcome |
 | **Input Methods** | Paste text · Upload .hl7 · .txt · .csv · .xlsx · .xls · .docx |
 | **Output Formats** | FHIR JSON · FHIR XML · Human-readable report |
 | **UI** | Dark-mode responsive web UI with copy/download per format |

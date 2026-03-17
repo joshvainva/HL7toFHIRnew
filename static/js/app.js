@@ -61,6 +61,7 @@ const clearBtn      = document.getElementById('clear-btn');
 const refreshHistoryBtn = document.getElementById('refresh-history-btn');
 const clearHistoryBtn = document.getElementById('clear-history-btn');
 const historyList = document.getElementById('history-list');
+const convertBar = document.querySelector('.convert-bar');
 
 // ---------------------------------------------------------------------------
 // Input tab switching
@@ -71,6 +72,12 @@ document.querySelectorAll('.input-tabs .tab-btn').forEach(btn => {
     document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
     btn.classList.add('active');
     document.getElementById(`tab-${btn.dataset.tab}`).classList.add('active');
+    // Hide convert bar if history tab is active
+    if (btn.dataset.tab === 'history') {
+      convertBar.style.display = 'none';
+    } else {
+      convertBar.style.display = '';
+    }
   });
 });
 
