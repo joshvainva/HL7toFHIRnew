@@ -1,0 +1,32 @@
+version: "3.9"
+
+services:
+  hl7-fhir-converter:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: hl7-fhir-converter:1.0.0
+    container_name: hl7-fhir-converter
+    restart: unless-stopped
+    ports:
+      - "${APP_PORT:-8000}:8000"
+    environment:
+      # CORS origins — comma-separated. Use '*' for development only.
+      - ALLOWED_ORIGINS=${ALLOWED_ORIGINS:-*}
+      # Uvicorn log level: debug | info | warning | error | critical
+      - LOG_LEVEL=${LOG_LEVEL:-info}
+    healthcheck:
+      test: ["CMD", "python", "-c",
+        "import urllib.request; urllib.request.urlopen('http://localhost:8000/api/health')"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 15s
+    # Resource limits for production use
+    deploy:
+      resources:
+        limits:
+          cpus: "1.0"
+          memory: 512M
+        reservations:
+          memory: 128M

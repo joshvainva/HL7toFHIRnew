@@ -1,0 +1,187 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>HL7toFHIR message converter</title>
+  <link rel="stylesheet" href="/static/css/style.css" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet" />
+</head>
+<body>
+  <!-- ===== HEADER ===== -->
+  <header class="header">
+    <div class="header-inner">
+      <div class="logo">
+        <span class="logo-icon">⚕</span>
+        <div>
+          <span class="logo-title">HL7toFHIR message converter</span>
+          <span class="logo-sub">Healthcare Interoperability Tool</span>
+        </div>
+      </div>
+      <div class="header-badges">
+        <span class="badge badge-hl7">HL7 v2.x</span>
+        <span class="badge badge-fhir">FHIR R4</span>
+      </div>
+    </div>
+  </header>
+
+  <!-- ===== MAIN ===== -->
+  <main class="main">
+    <div class="container">
+
+      <!-- ===== INPUT PANEL ===== -->
+      <section class="panel input-panel">
+        <div class="panel-header">
+          <h2 class="panel-title">Input</h2>
+          <div class="input-tabs">
+            <button class="tab-btn active" data-tab="text">Paste HL7</button>
+            <button class="tab-btn" data-tab="file">Upload File</button>
+            <button class="tab-btn" data-tab="history">History</button>
+          </div>
+        </div>
+
+        <!-- Text input tab -->
+        <div class="tab-content active" id="tab-text">
+          <textarea
+            id="hl7-input"
+            class="hl7-textarea"
+            placeholder="Paste your HL7 message here…
+
+Example:
+MSH|^~\&|SENDING|FACILITY|RECV|DEST|20240101120000||ADT^A01|MSG001|P|2.5
+EVN|A01|20240101120000
+PID|1||MRN12345^^^HOSP^MR||DOE^JOHN^A||19800315|M|||123 MAIN ST^^CHICAGO^IL^60601||(312)555-1234|||S
+PV1|1|I|ICU^101^A|E|||NPI123^SMITH^JANE|||SUR||||ADM|||V|||||||||||||||||||||||20240101120000"
+            spellcheck="false"
+          ></textarea>
+          <div class="sample-bar">
+            <span class="sample-label">Load sample:</span>
+            <button class="sample-btn" data-type="adt">ADT^A01</button>
+            <button class="sample-btn" data-type="oru">ORU^R01</button>
+            <button class="sample-btn" data-type="orm">ORM^O01</button>
+            <button class="clear-btn" id="clear-btn">Clear</button>
+          </div>
+        </div>
+
+        <!-- File upload tab -->
+        <div class="tab-content" id="tab-file">
+          <div class="drop-zone" id="drop-zone">
+            <div class="drop-icon">📂</div>
+            <p class="drop-text">Drag &amp; drop file here, or <label class="browse-label" for="file-input">browse</label></p>
+            <p class="drop-hint">Supported: .hl7 · .txt · .csv · .xlsx · .xls · .docx</p>
+            <input type="file" id="file-input" accept=".hl7,.txt,.csv,.xlsx,.xls,.docx" hidden />
+          </div>
+          <div id="file-info" class="file-info hidden"></div>
+        </div>
+
+        <!-- History tab -->
+        <div class="tab-content" id="tab-history">
+          <div class="history-controls">
+            <button class="btn btn-secondary" id="refresh-history-btn">🔄 Refresh</button>
+            <button class="btn btn-outline" id="clear-history-btn">🗑 Clear History</button>
+          </div>
+          <div id="history-list" class="history-list">
+            <div class="history-empty">
+              <span>📋</span>
+              <p>No conversion history yet. Convert some HL7 messages to see them here.</p>
+            </div>
+          </div>
+        </div>
+
+        <div class="convert-bar">
+          <button class="btn btn-primary" id="convert-btn">
+            <span class="btn-icon">⚡</span>
+            Convert to FHIR
+          </button>
+          <div class="spinner hidden" id="spinner">
+            <div class="spin-dot"></div>
+            <span>Converting…</span>
+          </div>
+        </div>
+      </section>
+
+      <!-- ===== STATUS BAR ===== -->
+      <div id="status-bar" class="status-bar hidden">
+        <div class="status-badges" id="status-badges"></div>
+        <div class="warning-list" id="warning-list"></div>
+      </div>
+
+      <!-- ===== ERROR PANEL ===== -->
+      <div id="error-panel" class="error-panel hidden">
+        <span class="error-icon">⚠</span>
+        <div>
+          <strong>Conversion Failed</strong>
+          <p id="error-message"></p>
+          <ul id="error-list"></ul>
+        </div>
+      </div>
+
+      <!-- ===== OUTPUT PANEL ===== -->
+      <section class="panel output-panel hidden" id="output-panel">
+        <div class="panel-header">
+          <h2 class="panel-title">Output</h2>
+          <div class="output-tabs">
+            <button class="tab-btn active" data-out-tab="json">FHIR JSON</button>
+            <button class="tab-btn" data-out-tab="xml">FHIR XML</button>
+            <button class="tab-btn" data-out-tab="readable">Human Readable</button>
+            <button class="tab-btn" data-out-tab="summary">Summary</button>
+          </div>
+        </div>
+
+        <!-- JSON -->
+        <div class="out-content active" id="out-json">
+          <div class="output-toolbar">
+            <span class="lang-badge">JSON</span>
+            <div class="toolbar-actions">
+              <button class="tool-btn" onclick="copyOutput('json')">📋 Copy</button>
+              <button class="tool-btn" onclick="downloadOutput('json', 'fhir_bundle.json', 'application/json')">⬇ Download</button>
+            </div>
+          </div>
+          <pre class="code-block" id="json-output"></pre>
+        </div>
+
+        <!-- XML -->
+        <div class="out-content" id="out-xml">
+          <div class="output-toolbar">
+            <span class="lang-badge lang-xml">XML</span>
+            <div class="toolbar-actions">
+              <button class="tool-btn" onclick="copyOutput('xml')">📋 Copy</button>
+              <button class="tool-btn" onclick="downloadOutput('xml', 'fhir_bundle.xml', 'application/xml')">⬇ Download</button>
+            </div>
+          </div>
+          <pre class="code-block" id="xml-output"></pre>
+        </div>
+
+        <!-- Human Readable -->
+        <div class="out-content" id="out-readable">
+          <div class="output-toolbar">
+            <span class="lang-badge lang-text">TEXT</span>
+            <div class="toolbar-actions">
+              <button class="tool-btn" onclick="copyOutput('readable')">📋 Copy</button>
+              <button class="tool-btn" onclick="downloadOutput('readable', 'fhir_report.txt', 'text/plain')">⬇ Download</button>
+            </div>
+          </div>
+          <pre class="code-block readable-block" id="readable-output"></pre>
+        </div>
+
+        <!-- Summary -->
+        <div class="out-content" id="out-summary">
+          <div class="output-toolbar">
+            <span class="lang-badge lang-sum">SUMMARY</span>
+          </div>
+          <div id="summary-content" class="summary-grid"></div>
+        </div>
+      </section>
+
+    </div><!-- /.container -->
+  </main>
+
+  <!-- ===== FOOTER ===== -->
+  <footer class="footer">
+    <p>HL7 → FHIR Converter · FHIR R4 · Built with FastAPI &amp; Python</p>
+  </footer>
+
+  <script src="/static/js/app.js"></script>
+</body>
+</html>
