@@ -13,6 +13,7 @@ from fastapi.responses import JSONResponse, PlainTextResponse, Response
 from app.core.parser import HL7Parser, HL7ParseError
 from app.core.validator import HL7Validator
 from app.core.mapper import FHIRMapper
+from app.core.fhir_mapper import FHIRtoHL7Mapper
 from app.core.renderer import (
     to_fhir_json,
     to_fhir_xml,
@@ -21,7 +22,7 @@ from app.core.renderer import (
 )
 from app.core.history import history, HistoryItem
 from app.file_handlers.registry import get_handler
-from app.models.schemas import ConversionResult, ErrorResponse, ResourceSummary
+from app.models.schemas import ConversionResult, ErrorResponse, FHIRConversionRequest, ResourceSummary
 
 logger = logging.getLogger(__name__)
 
@@ -31,6 +32,7 @@ router = APIRouter()
 _parser = HL7Parser()
 _validator = HL7Validator()
 _mapper = FHIRMapper()
+_fhir_mapper = FHIRtoHL7Mapper()
 
 
 def _process_hl7_text(raw_message: str, input_type: str = "text", input_name: Optional[str] = None) -> ConversionResult:
@@ -93,7 +95,7 @@ def _process_hl7_text(raw_message: str, input_type: str = "text", input_name: Op
         return result
 
     # 3. Map to FHIR
-    bundle, mapping_warnings = _mapper.map(parsed)
+    bundle, mapping_warnings, field_mappings = _mapper.map(parsed)
 
     # 4. Render outputs
     fhir_json_str = to_fhir_json(bundle)
@@ -118,6 +120,7 @@ def _process_hl7_text(raw_message: str, input_type: str = "text", input_name: Op
         fhir_xml=fhir_xml_str,
         human_readable=human_str,
         resource_summary=summaries,
+        field_mappings=field_mappings,
         warnings=validation.warnings + mapping_warnings,
     )
 
@@ -135,6 +138,7 @@ def _process_hl7_text(raw_message: str, input_type: str = "text", input_name: Op
         fhir_json=bundle,
         fhir_xml=fhir_xml_str,
         human_readable=human_str,
+        field_mappings=field_mappings,
         warnings=validation.warnings + mapping_warnings,
     )
     history.add_conversion(history_item)
@@ -227,6 +231,78 @@ async def convert_file(file: UploadFile = File(...)):
         return results[0]
 
     return {"batch": True, "count": len(results), "results": results}
+
+
+def _process_fhir_bundle(bundle: dict, input_type: str = "text", input_name: Optional[str] = None) -> ConversionResult:
+    """Core FHIR→HL7 pipeline: detect type → convert → store history."""
+    try:
+        hl7_message, msg_type, error = _fhir_mapper.map(bundle)
+    except Exception as exc:
+        return ConversionResult(
+            success=False,
+            direction="fhir_to_hl7",
+            errors=[str(exc)],
+        )
+
+    if error or not hl7_message:
+        return ConversionResult(
+            success=False,
+            direction="fhir_to_hl7",
+            message_type=msg_type,
+            errors=[error or "Conversion produced no output"],
+        )
+
+    result = ConversionResult(
+        success=True,
+        direction="fhir_to_hl7",
+        message_type=msg_type,
+        hl7_output=hl7_message,
+    )
+
+    history_item = HistoryItem(
+        id=str(uuid.uuid4()),
+        timestamp=datetime.now().isoformat(),
+        hl7_version="2.5",
+        message_type=msg_type,
+        message_event=None,
+        input_type=input_type,
+        input_name=input_name,
+        success=True,
+        hl7_content="",
+        direction="fhir_to_hl7",
+        fhir_json=bundle,
+        hl7_output=hl7_message,
+    )
+    history.add_conversion(history_item)
+
+    return result
+
+
+@router.post(
+    "/convert/fhir-to-hl7",
+    response_model=ConversionResult,
+    summary="Convert FHIR Bundle to HL7",
+    description="Accept a FHIR R4 Bundle and return an HL7 v2.x message string.",
+)
+async def convert_fhir_to_hl7(payload: dict) -> ConversionResult:
+    bundle = payload.get("fhir_bundle")
+    if not bundle:
+        # Allow sending the bundle directly at top level if it has resourceType
+        if payload.get("resourceType") == "Bundle":
+            bundle = payload
+    if not bundle:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail="Field 'fhir_bundle' is required and must be a FHIR Bundle object.",
+        )
+    try:
+        return _process_fhir_bundle(bundle, input_type="text")
+    except Exception as exc:
+        logger.exception("Unexpected error during FHIR→HL7 conversion")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Internal conversion error: {exc}",
+        )
 
 
 @router.get(

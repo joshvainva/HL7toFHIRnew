@@ -21,9 +21,12 @@ class HistoryItem:
     input_name: Optional[str]  # filename if uploaded
     success: bool
     hl7_content: str
+    direction: str = "hl7_to_fhir"
     fhir_json: Optional[Dict] = None
     fhir_xml: Optional[str] = None
     human_readable: Optional[str] = None
+    field_mappings: Optional[List] = None
+    hl7_output: Optional[str] = None
     errors: Optional[List[str]] = None
     warnings: Optional[List[str]] = None
 

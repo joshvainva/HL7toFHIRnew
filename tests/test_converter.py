@@ -118,6 +118,14 @@ class TestMapper:
         types = [e["resource"]["resourceType"] for e in bundle["entry"]]
         assert "ServiceRequest" in types
 
+    def test_orm_field_mappings_populated(self):
+        msg = parser.parse(ORM_MSG)
+        bundle, warnings, field_mappings = mapper.map(msg)
+        # Ensure we have at least one mapping entry for the ServiceRequest
+        assert len(field_mappings) > 0
+        service_mappings = [m for m in field_mappings if m.resource_type == "ServiceRequest"]
+        assert len(service_mappings) >= 1
+
     def test_patient_name_extracted(self):
         msg = parser.parse(ADT_MSG)
         bundle, _ = mapper.map(msg)

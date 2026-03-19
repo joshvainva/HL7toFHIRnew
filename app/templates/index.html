@@ -23,6 +23,11 @@
         <span class="badge badge-hl7">HL7 v2.x</span>
         <span class="badge badge-fhir">FHIR R4</span>
       </div>
+      <!-- Direction Toggle -->
+      <div class="direction-toggle" id="direction-toggle">
+        <button class="dir-btn active" id="btn-hl7-to-fhir" onclick="setDirection('hl7_to_fhir')">HL7 → FHIR</button>
+        <button class="dir-btn" id="btn-fhir-to-hl7" onclick="setDirection('fhir_to_hl7')">FHIR → HL7</button>
+      </div>
     </div>
   </header>
 
@@ -35,32 +40,69 @@
         <div class="panel-header">
           <h2 class="panel-title">Input</h2>
           <div class="input-tabs">
-            <button class="tab-btn active" data-tab="text">Paste HL7</button>
-            <button class="tab-btn" data-tab="file">Upload File</button>
-            <button class="tab-btn" data-tab="history">History</button>
+            <button class="tab-btn active" id="in-tab-text" data-tab="text">Paste HL7</button>
+            <button class="tab-btn" id="in-tab-file" data-tab="file">Upload File</button>
+            <button class="tab-btn" id="in-tab-mapping" data-tab="mapping">Mapping Rules</button>
+            <button class="tab-btn" id="in-tab-history" data-tab="history">History</button>
           </div>
         </div>
 
         <!-- Text input tab -->
         <div class="tab-content active" id="tab-text">
-          <textarea
-            id="hl7-input"
-            class="hl7-textarea"
-            placeholder="Paste your HL7 message here…
+          <!-- HL7 input (shown when direction = hl7_to_fhir) -->
+          <div id="hl7-input-area">
+            <textarea
+              id="hl7-input"
+              class="hl7-textarea"
+              placeholder="Paste your HL7 message here…
 
 Example:
 MSH|^~\&|SENDING|FACILITY|RECV|DEST|20240101120000||ADT^A01|MSG001|P|2.5
 EVN|A01|20240101120000
 PID|1||MRN12345^^^HOSP^MR||DOE^JOHN^A||19800315|M|||123 MAIN ST^^CHICAGO^IL^60601||(312)555-1234|||S
 PV1|1|I|ICU^101^A|E|||NPI123^SMITH^JANE|||SUR||||ADM|||V|||||||||||||||||||||||20240101120000"
-            spellcheck="false"
-          ></textarea>
-          <div class="sample-bar">
-            <span class="sample-label">Load sample:</span>
-            <button class="sample-btn" data-type="adt">ADT^A01</button>
-            <button class="sample-btn" data-type="oru">ORU^R01</button>
-            <button class="sample-btn" data-type="orm">ORM^O01</button>
-            <button class="clear-btn" id="clear-btn">Clear</button>
+              spellcheck="false"
+            ></textarea>
+            <div class="sample-bar">
+              <span class="sample-label">Load sample:</span>
+              <button class="sample-btn" data-type="adt">ADT^A01</button>
+              <button class="sample-btn" data-type="oru">ORU^R01</button>
+              <button class="sample-btn" data-type="orm">ORM^O01</button>
+              <button class="clear-btn" id="clear-btn">Clear</button>
+            </div>
+          </div>
+          <!-- FHIR input (shown when direction = fhir_to_hl7) -->
+          <div id="fhir-input-area" class="hidden">
+            <textarea
+              id="fhir-input"
+              class="hl7-textarea fhir-textarea"
+              placeholder='Paste your FHIR Bundle JSON here…
+
+Example:
+{
+  "resourceType": "Bundle",
+  "type": "collection",
+  "entry": [
+    {
+      "resource": {
+        "resourceType": "Patient",
+        "id": "p1",
+        "name": [{"family": "DOE", "given": ["JOHN"]}],
+        "birthDate": "1980-03-15",
+        "gender": "male"
+      }
+    }
+  ]
+}'
+              spellcheck="false"
+            ></textarea>
+            <div class="sample-bar">
+              <span class="sample-label">Load sample:</span>
+              <button class="sample-btn fhir-sample-btn" data-fhir-type="adt">ADT Bundle</button>
+              <button class="sample-btn fhir-sample-btn" data-fhir-type="oru">ORU Bundle</button>
+              <button class="sample-btn fhir-sample-btn" data-fhir-type="orm">ORM Bundle</button>
+              <button class="clear-btn" id="clear-fhir-btn">Clear</button>
+            </div>
           </div>
         </div>
 
@@ -89,10 +131,375 @@ PV1|1|I|ICU^101^A|E|||NPI123^SMITH^JANE|||SUR||||ADM|||V|||||||||||||||||||||||2
           </div>
         </div>
 
+        <!-- Mapping tab -->
+        <div class="tab-content" id="tab-mapping">
+          <div class="mapping-content">
+            <h3>FHIR Conversion Mapping Rules</h3>
+            <p class="mapping-intro">This tool converts HL7 v2.x messages to FHIR R4 resources. All major EHR vendors are supported (Epic, Cerner, Meditech, Allscripts, athenahealth, eClinicalWorks, NextGen).</p>
+
+            <!-- ===== SUPPORTED MESSAGE TYPES ===== -->
+            <div class="mapping-section">
+              <h4>Supported Message Types</h4>
+              <table class="mapping-table">
+                <thead><tr><th>HL7 Type</th><th>Event(s)</th><th>FHIR Resources Produced</th></tr></thead>
+                <tbody>
+                  <tr><td>ADT</td><td>A01–A62</td><td>Patient, Encounter, Organization, Practitioner</td></tr>
+                  <tr><td>ORU</td><td>R01</td><td>Patient, DiagnosticReport, Observation, Organization, Practitioner</td></tr>
+                  <tr><td>ORM</td><td>O01</td><td>Patient, ServiceRequest, Practitioner</td></tr>
+                  <tr><td>SIU</td><td>S12–S26</td><td>Patient, Appointment, Encounter, Organization</td></tr>
+                  <tr><td>MDM</td><td>T01–T11</td><td>Patient, DocumentReference, Organization, Practitioner</td></tr>
+                  <tr><td>DFT</td><td>P03</td><td>Patient, Claim, ChargeItem, Organization</td></tr>
+                  <tr><td>VXU</td><td>V04</td><td>Patient, Immunization, Organization</td></tr>
+                  <tr><td>MFN</td><td>M01–M13</td><td>Practitioner / Location / Medication (by segment type)</td></tr>
+                  <tr><td>BAR</td><td>P01/P02/P05/P06/P10</td><td>Patient, Account, Coverage, Organization</td></tr>
+                  <tr><td>ACK</td><td>Any</td><td>OperationOutcome</td></tr>
+                  <tr><td>Any other</td><td>—</td><td>Parameters (generic fallback)</td></tr>
+                </tbody>
+              </table>
+            </div>
+
+            <!-- ===== ADT ===== -->
+            <div class="mapping-section">
+              <h4>ADT — Admit / Discharge / Transfer</h4>
+
+              <div class="mapping-subsection">
+                <h5>Patient Resource (PID segment)</h5>
+                <table class="mapping-table">
+                  <thead><tr><th>FHIR Field</th><th>HL7 Segment.Field</th><th>Description / Notes</th></tr></thead>
+                  <tbody>
+                    <tr><td>identifier</td><td>PID-3 (~repeating), PID-2</td><td>All CX repetitions mapped; type code drives system URI (see Identifier Types table)</td></tr>
+                    <tr><td>name</td><td>PID-5, PID-9</td><td>XPN format: family^given^middle^suffix^prefix; PID-9 = aliases</td></tr>
+                    <tr><td>birthDate</td><td>PID-7</td><td>YYYYMMDD → ISO 8601 date</td></tr>
+                    <tr><td>gender</td><td>PID-8</td><td>M=male, F=female, O=other, U/N=unknown, A=other</td></tr>
+                    <tr><td>address</td><td>PID-11</td><td>XAD: street^other^city^state^zip^country</td></tr>
+                    <tr><td>telecom</td><td>PID-13, PID-14</td><td>Home phone (PID-13), Work phone (PID-14); type components preserved (PRN/WPN)</td></tr>
+                    <tr><td>maritalStatus</td><td>PID-16</td><td>HL7 v2 code mapped to CodeableConcept</td></tr>
+                    <tr><td>communication.language</td><td>PID-15</td><td>Language code; preferred=true</td></tr>
+                    <tr><td>deceasedBoolean</td><td>PID-30</td><td>Y=true, N=false</td></tr>
+                    <tr><td>deceasedDateTime</td><td>PID-29</td><td>Date/time of death</td></tr>
+                    <tr><td>extension (Z-segments)</td><td>ZPD/ZEP/ZAL/ZDS/ZCM/…</td><td>Each non-empty Z-segment field → extension urn:epic:z-segment:{name}-{n}</td></tr>
+                  </tbody>
+                </table>
+              </div>
+
+              <div class="mapping-subsection">
+                <h5>Encounter Resource (PV1 segment)</h5>
+                <table class="mapping-table">
+                  <thead><tr><th>FHIR Field</th><th>HL7 Segment.Field</th><th>Description / Notes</th></tr></thead>
+                  <tbody>
+                    <tr><td>status</td><td>MSH-9 event</td><td>A01/A04=in-progress, A03=finished, A11/A13=cancelled, A21=onleave</td></tr>
+                    <tr><td>class</td><td>PV1-2</td><td>I=IMP (inpatient), O=AMB (outpatient), E=EMER (emergency), P=PRE (pre-admit)</td></tr>
+                    <tr><td>identifier</td><td>PV1-19</td><td>Visit number</td></tr>
+                    <tr><td>period.start</td><td>PV1-44, EVN-2</td><td>Admission date/time; falls back to EVN-2 if PV1-44 absent</td></tr>
+                    <tr><td>period.end</td><td>PV1-45</td><td>Discharge date/time</td></tr>
+                    <tr><td>serviceProvider</td><td>MSH-4</td><td>Sending facility → Organization reference</td></tr>
+                    <tr><td>participant (attending)</td><td>PV1-7</td><td>XCN: id^family^given^middle; role = ATND</td></tr>
+                    <tr><td>participant (referring)</td><td>PV1-8</td><td>role = REF</td></tr>
+                    <tr><td>participant (consulting)</td><td>PV1-9</td><td>role = CON</td></tr>
+                    <tr><td>participant (admitting)</td><td>PV1-17</td><td>role = ADM</td></tr>
+                    <tr><td>hospitalization.dischargeDisposition</td><td>PV1-36</td><td>Discharge disposition code</td></tr>
+                    <tr><td>reasonCode</td><td>DG1-3</td><td>ICD codes from all DG1 segments</td></tr>
+                  </tbody>
+                </table>
+              </div>
+
+              <div class="mapping-subsection">
+                <h5>Organization Resource (MSH / SFT segments)</h5>
+                <table class="mapping-table">
+                  <thead><tr><th>FHIR Field</th><th>HL7 Segment.Field</th><th>Description / Notes</th></tr></thead>
+                  <tbody>
+                    <tr><td>name</td><td>MSH-4</td><td>Sending facility name</td></tr>
+                    <tr><td>identifier</td><td>MSH-3</td><td>Sending application</td></tr>
+                    <tr><td>extension (vendor)</td><td>SFT-1</td><td>EHR software vendor (Epic, Cerner, etc.) → urn:ehr:sft:vendor</td></tr>
+                    <tr><td>extension (version)</td><td>SFT-2</td><td>EHR software version → urn:ehr:sft:version</td></tr>
+                  </tbody>
+                </table>
+              </div>
+            </div>
+
+            <!-- ===== ORU ===== -->
+            <div class="mapping-section">
+              <h4>ORU — Observation Result</h4>
+
+              <div class="mapping-subsection">
+                <h5>DiagnosticReport Resource (OBR segment)</h5>
+                <table class="mapping-table">
+                  <thead><tr><th>FHIR Field</th><th>HL7 Segment.Field</th><th>Description / Notes</th></tr></thead>
+                  <tbody>
+                    <tr><td>status</td><td>OBR-25</td><td>F=final, P=preliminary, C=corrected, X=cancelled, I=registered</td></tr>
+                    <tr><td>code</td><td>OBR-4</td><td>CWE coded field; defaults to LOINC system</td></tr>
+                    <tr><td>identifier (filler)</td><td>OBR-3</td><td>Filler order number</td></tr>
+                    <tr><td>identifier (placer)</td><td>OBR-2</td><td>Placer order number</td></tr>
+                    <tr><td>effectiveDateTime</td><td>OBR-7</td><td>Observation collection date/time</td></tr>
+                    <tr><td>issued</td><td>OBR-22</td><td>Report status change date/time</td></tr>
+                    <tr><td>performer</td><td>OBR-32, OBR-34</td><td>Principal result interpreter / technician</td></tr>
+                    <tr><td>category</td><td>Fixed</td><td>LAB (laboratory)</td></tr>
+                    <tr><td>resultsInterpreter</td><td>OBR-32</td><td>Interpreting physician XCN</td></tr>
+                  </tbody>
+                </table>
+              </div>
+
+              <div class="mapping-subsection">
+                <h5>Observation Resource (OBX segment)</h5>
+                <table class="mapping-table">
+                  <thead><tr><th>FHIR Field</th><th>HL7 Segment.Field</th><th>Description / Notes</th></tr></thead>
+                  <tbody>
+                    <tr><td>status</td><td>OBX-11</td><td>F=final, P=preliminary, C=corrected, X=cancelled</td></tr>
+                    <tr><td>code</td><td>OBX-3</td><td>LOINC observation code</td></tr>
+                    <tr><td>valueQuantity</td><td>OBX-5 (type NM)</td><td>Numeric value + unit from OBX-6</td></tr>
+                    <tr><td>valueCodeableConcept</td><td>OBX-5 (type CE/CWE)</td><td>Coded result</td></tr>
+                    <tr><td>valueString</td><td>OBX-5 (type ST/TX/SN/FT)</td><td>Text or structured numeric result</td></tr>
+                    <tr><td>valueAttachment</td><td>OBX-5 (type ED)</td><td>Embedded document (base64)</td></tr>
+                    <tr><td>referenceRange</td><td>OBX-7</td><td>Reference range text</td></tr>
+                    <tr><td>interpretation</td><td>OBX-8</td><td>H/L/N/A/AA/LL/HH interpretation codes</td></tr>
+                    <tr><td>effectiveDateTime</td><td>OBX-14</td><td>Observation date/time override</td></tr>
+                    <tr><td>method</td><td>OBX-17</td><td>Observation method</td></tr>
+                    <tr><td>performer</td><td>OBX-16</td><td>Responsible observer XCN</td></tr>
+                  </tbody>
+                </table>
+              </div>
+            </div>
+
+            <!-- ===== ORM ===== -->
+            <div class="mapping-section">
+              <h4>ORM — Order Message</h4>
+              <div class="mapping-subsection">
+                <h5>ServiceRequest Resource (ORC + OBR segments)</h5>
+                <table class="mapping-table">
+                  <thead><tr><th>FHIR Field</th><th>HL7 Segment.Field</th><th>Description / Notes</th></tr></thead>
+                  <tbody>
+                    <tr><td>status</td><td>ORC-1</td><td>NW=active, CA=revoked, DC=stopped, HD=on-hold, RP=draft</td></tr>
+                    <tr><td>intent</td><td>ORC-1</td><td>NW=order, RP=reflex-order, RO=reflex-order</td></tr>
+                    <tr><td>identifier (placer)</td><td>ORC-2</td><td>Placer order number</td></tr>
+                    <tr><td>identifier (filler)</td><td>ORC-3</td><td>Filler order number</td></tr>
+                    <tr><td>code</td><td>OBR-4</td><td>Ordered test/procedure code</td></tr>
+                    <tr><td>authoredOn</td><td>ORC-9</td><td>Transaction date/time</td></tr>
+                    <tr><td>requester</td><td>ORC-12</td><td>Ordering provider XCN</td></tr>
+                    <tr><td>reasonCode</td><td>DG1-3</td><td>Order reason / diagnosis</td></tr>
+                    <tr><td>note</td><td>NTE-3</td><td>Order comments</td></tr>
+                  </tbody>
+                </table>
+              </div>
+            </div>
+
+            <!-- ===== SIU ===== -->
+            <div class="mapping-section">
+              <h4>SIU — Scheduling Information Unsolicited</h4>
+              <div class="mapping-subsection">
+                <h5>Appointment Resource (SCH + AIS segments)</h5>
+                <table class="mapping-table">
+                  <thead><tr><th>FHIR Field</th><th>HL7 Segment.Field</th><th>Description / Notes</th></tr></thead>
+                  <tbody>
+                    <tr><td>status</td><td>MSH-9 event</td><td>S12/S14=booked, S15=cancelled, S17=arrived, S26=noshow</td></tr>
+                    <tr><td>identifier</td><td>SCH-1, SCH-2</td><td>Placer / filler appointment IDs</td></tr>
+                    <tr><td>start</td><td>SCH-11[3]</td><td>Appointment start date/time</td></tr>
+                    <tr><td>end</td><td>SCH-11[3] + SCH-9</td><td>Start + duration</td></tr>
+                    <tr><td>minutesDuration</td><td>SCH-9</td><td>Appointment duration (minutes)</td></tr>
+                    <tr><td>serviceType</td><td>AIS-3</td><td>Service code</td></tr>
+                    <tr><td>participant (patient)</td><td>PID</td><td>Patient reference</td></tr>
+                    <tr><td>participant (practitioner)</td><td>SCH-16, AIP-3</td><td>Scheduling provider</td></tr>
+                    <tr><td>participant (location)</td><td>AIL-3</td><td>Room / facility location</td></tr>
+                  </tbody>
+                </table>
+              </div>
+            </div>
+
+            <!-- ===== MDM ===== -->
+            <div class="mapping-section">
+              <h4>MDM — Medical Document Management</h4>
+              <div class="mapping-subsection">
+                <h5>DocumentReference Resource (TXA + OBX segments)</h5>
+                <table class="mapping-table">
+                  <thead><tr><th>FHIR Field</th><th>HL7 Segment.Field</th><th>Description / Notes</th></tr></thead>
+                  <tbody>
+                    <tr><td>status</td><td>TXA-19</td><td>AV=current, OB=superseded, IN=entered-in-error</td></tr>
+                    <tr><td>docStatus</td><td>TXA-17</td><td>AU=amended, DI=preliminary, DO=final</td></tr>
+                    <tr><td>type</td><td>TXA-2</td><td>Document type code</td></tr>
+                    <tr><td>date</td><td>TXA-4</td><td>Activity date/time</td></tr>
+                    <tr><td>identifier</td><td>TXA-12</td><td>Unique document number</td></tr>
+                    <tr><td>author</td><td>TXA-5, TXA-9</td><td>Originating / assigned document authenticator</td></tr>
+                    <tr><td>content.attachment</td><td>OBX-5 (ED/TX)</td><td>Embedded document content (base64 or text)</td></tr>
+                    <tr><td>context.encounter</td><td>PV1-19</td><td>Visit number reference</td></tr>
+                  </tbody>
+                </table>
+              </div>
+            </div>
+
+            <!-- ===== DFT ===== -->
+            <div class="mapping-section">
+              <h4>DFT — Detail Financial Transactions</h4>
+              <div class="mapping-subsection">
+                <h5>Claim / ChargeItem Resources (FT1 segment)</h5>
+                <table class="mapping-table">
+                  <thead><tr><th>FHIR Field</th><th>HL7 Segment.Field</th><th>Description / Notes</th></tr></thead>
+                  <tbody>
+                    <tr><td>ChargeItem.code</td><td>FT1-7</td><td>Transaction code (CPT/HCPCS)</td></tr>
+                    <tr><td>ChargeItem.quantity</td><td>FT1-10</td><td>Transaction quantity</td></tr>
+                    <tr><td>ChargeItem.priceOverride</td><td>FT1-22</td><td>Transaction amount</td></tr>
+                    <tr><td>ChargeItem.occurrence</td><td>FT1-4</td><td>Transaction date</td></tr>
+                    <tr><td>Claim.diagnosis</td><td>DG1-3</td><td>ICD diagnosis codes</td></tr>
+                    <tr><td>Claim.insurance</td><td>IN1 segment</td><td>Plan ID, payor name, group number</td></tr>
+                  </tbody>
+                </table>
+              </div>
+            </div>
+
+            <!-- ===== VXU ===== -->
+            <div class="mapping-section">
+              <h4>VXU — Vaccination Record Update</h4>
+              <div class="mapping-subsection">
+                <h5>Immunization Resource (RXA segment)</h5>
+                <table class="mapping-table">
+                  <thead><tr><th>FHIR Field</th><th>HL7 Segment.Field</th><th>Description / Notes</th></tr></thead>
+                  <tbody>
+                    <tr><td>status</td><td>RXA-20</td><td>CP=completed, RE=not-done, NA=not-done</td></tr>
+                    <tr><td>vaccineCode</td><td>RXA-5</td><td>CVX vaccine code</td></tr>
+                    <tr><td>occurrenceDateTime</td><td>RXA-3</td><td>Administration date/time</td></tr>
+                    <tr><td>doseQuantity</td><td>RXA-6, RXA-7</td><td>Administered amount and units</td></tr>
+                    <tr><td>lotNumber</td><td>RXA-15</td><td>Substance lot number</td></tr>
+                    <tr><td>expirationDate</td><td>RXA-16</td><td>Substance expiry date</td></tr>
+                    <tr><td>manufacturer</td><td>RXA-17</td><td>Substance manufacturer (MVX code)</td></tr>
+                    <tr><td>site</td><td>RXR-2</td><td>Anatomic site code</td></tr>
+                    <tr><td>route</td><td>RXR-1</td><td>Administration route code</td></tr>
+                    <tr><td>performer</td><td>RXA-10</td><td>Administering provider XCN</td></tr>
+                  </tbody>
+                </table>
+              </div>
+            </div>
+
+            <!-- ===== BAR ===== -->
+            <div class="mapping-section">
+              <h4>BAR — Add/Change Billing Account (Epic / Cerner)</h4>
+
+              <div class="mapping-subsection">
+                <h5>Account Resource (PV1 + GT1 segments)</h5>
+                <table class="mapping-table">
+                  <thead><tr><th>FHIR Field</th><th>HL7 Segment.Field</th><th>Description / Notes</th></tr></thead>
+                  <tbody>
+                    <tr><td>status</td><td>MSH-9 event</td><td>P01/P05/P10=active, P02/P06=inactive</td></tr>
+                    <tr><td>identifier</td><td>PV1-19</td><td>Visit / account number</td></tr>
+                    <tr><td>servicePeriod.start</td><td>PV1-44</td><td>Admission date/time</td></tr>
+                    <tr><td>servicePeriod.end</td><td>PV1-45</td><td>Discharge date/time</td></tr>
+                    <tr><td>guarantor</td><td>GT1-3</td><td>Guarantor name</td></tr>
+                    <tr><td>subject</td><td>PID</td><td>Reference to Patient resource</td></tr>
+                    <tr><td>owner</td><td>MSH-4</td><td>Reference to Organization resource</td></tr>
+                  </tbody>
+                </table>
+              </div>
+
+              <div class="mapping-subsection">
+                <h5>Coverage Resource (IN1 segment)</h5>
+                <table class="mapping-table">
+                  <thead><tr><th>FHIR Field</th><th>HL7 Segment.Field</th><th>Description / Notes</th></tr></thead>
+                  <tbody>
+                    <tr><td>identifier (plan)</td><td>IN1-2</td><td>Insurance plan ID</td></tr>
+                    <tr><td>payor</td><td>IN1-4</td><td>Insurance company name</td></tr>
+                    <tr><td>class (group)</td><td>IN1-8</td><td>Group number</td></tr>
+                    <tr><td>identifier (member)</td><td>IN1-49</td><td>Member/subscriber ID</td></tr>
+                    <tr><td>beneficiary</td><td>PID</td><td>Reference to Patient resource</td></tr>
+                  </tbody>
+                </table>
+              </div>
+            </div>
+
+            <!-- ===== MFN ===== -->
+            <div class="mapping-section">
+              <h4>MFN — Master Files Notification</h4>
+              <table class="mapping-table">
+                <thead><tr><th>MFE-2 Type</th><th>Segment</th><th>FHIR Resource</th><th>Key Fields</th></tr></thead>
+                <tbody>
+                  <tr><td>PRCxx (Practitioner)</td><td>STF/PRA</td><td>Practitioner</td><td>STF-2 ID, STF-3 name, STF-5 gender, PRA-5 specialty</td></tr>
+                  <tr><td>LOC (Location)</td><td>LOC</td><td>Location</td><td>LOC-1 ID, LOC-2 name, LOC-3 type, LOC-4 address</td></tr>
+                  <tr><td>CDM (Charge)</td><td>CDM</td><td>ChargeItemDefinition</td><td>CDM-1 code, CDM-3 description, CDM-7 price</td></tr>
+                  <tr><td>MFN (Medication)</td><td>RXD/RXE</td><td>Medication</td><td>Medication code, name, form, strength</td></tr>
+                </tbody>
+              </table>
+            </div>
+
+            <!-- ===== EPIC / EHR IDENTIFIERS ===== -->
+            <div class="mapping-section">
+              <h4>Epic / EHR Identifier Type Mappings (CX-5 Type Code)</h4>
+              <p class="mapping-intro">HL7 CX field format: <code>value^check^authority^facility^type_code</code>. The type code (5th component) determines the FHIR system URI.</p>
+              <table class="mapping-table">
+                <thead><tr><th>CX Type Code</th><th>EHR Meaning</th><th>FHIR system URI</th></tr></thead>
+                <tbody>
+                  <tr><td>EPI</td><td>Epic Internal Patient ID</td><td>urn:oid:1.2.840.114350.1.13</td></tr>
+                  <tr><td>MRN / MR</td><td>Medical Record Number</td><td>http://hospital.example.org/mrn</td></tr>
+                  <tr><td>NPI</td><td>National Provider Identifier</td><td>http://hl7.org/fhir/sid/us-npi</td></tr>
+                  <tr><td>SS / SSN</td><td>Social Security Number</td><td>http://hl7.org/fhir/sid/us-ssn</td></tr>
+                  <tr><td>AN</td><td>Account Number</td><td>http://hospital.example.org/account</td></tr>
+                  <tr><td>VN</td><td>Visit Number</td><td>http://hospital.example.org/visit</td></tr>
+                  <tr><td>EN</td><td>Enterprise ID</td><td>http://hospital.example.org/enterprise</td></tr>
+                  <tr><td>PI</td><td>Patient Internal ID (generic)</td><td>http://hospital.example.org/patid</td></tr>
+                  <tr><td>(authority only)</td><td>No type code, authority in CX-3</td><td>{system_prefix}:{authority}</td></tr>
+                </tbody>
+              </table>
+            </div>
+
+            <!-- ===== Z-SEGMENTS ===== -->
+            <div class="mapping-section">
+              <h4>Z-Segment Extensions (Epic / EHR Proprietary)</h4>
+              <p class="mapping-intro">All Z-segment fields are preserved as FHIR extensions on the Patient resource so no proprietary data is lost.</p>
+              <table class="mapping-table">
+                <thead><tr><th>Z-Segment</th><th>Common EHR Usage</th><th>FHIR Extension URL Pattern</th></tr></thead>
+                <tbody>
+                  <tr><td>ZPD</td><td>Epic patient demographics (race, ethnicity, language)</td><td>urn:epic:z-segment:zpd-{n}</td></tr>
+                  <tr><td>ZEP</td><td>Epic encounter properties</td><td>urn:epic:z-segment:zep-{n}</td></tr>
+                  <tr><td>ZAL</td><td>Epic allergy supplement</td><td>urn:epic:z-segment:zal-{n}</td></tr>
+                  <tr><td>ZDS</td><td>Document supplement (Cerner)</td><td>urn:epic:z-segment:zds-{n}</td></tr>
+                  <tr><td>ZCM</td><td>Custom medication info</td><td>urn:epic:z-segment:zcm-{n}</td></tr>
+                  <tr><td>ZFX / ZIN / ZPI / ZSF / ZVS / ZPA</td><td>Vendor-specific fields</td><td>urn:epic:z-segment:{name}-{n}</td></tr>
+                  <tr><td>Any other Z*</td><td>Auto-detected from message</td><td>urn:epic:z-segment:{name}-{n}</td></tr>
+                </tbody>
+              </table>
+            </div>
+
+            <!-- ===== CODING SYSTEMS ===== -->
+            <div class="mapping-section">
+              <h4>Coding System Mappings</h4>
+              <table class="mapping-table">
+                <thead><tr><th>HL7 Code</th><th>FHIR System URI</th><th>Description</th></tr></thead>
+                <tbody>
+                  <tr><td>LN, LOINC</td><td>http://loinc.org</td><td>LOINC codes (labs, observations)</td></tr>
+                  <tr><td>SCT, SNOMED</td><td>http://snomed.info/sct</td><td>SNOMED CT clinical terms</td></tr>
+                  <tr><td>ICD10, I10</td><td>http://hl7.org/fhir/sid/icd-10</td><td>ICD-10 diagnosis codes</td></tr>
+                  <tr><td>ICD9, I9</td><td>http://hl7.org/fhir/sid/icd-9-cm</td><td>ICD-9-CM codes</td></tr>
+                  <tr><td>CPT4, C4</td><td>http://www.ama-assn.org/go/cpt</td><td>CPT procedure codes</td></tr>
+                  <tr><td>NPI</td><td>http://hl7.org/fhir/sid/us-npi</td><td>US National Provider Identifier</td></tr>
+                  <tr><td>RXNORM</td><td>http://www.nlm.nih.gov/research/umls/rxnorm</td><td>RxNorm medication codes</td></tr>
+                  <tr><td>NDC</td><td>http://hl7.org/fhir/sid/ndc</td><td>National Drug Code</td></tr>
+                  <tr><td>HL70001–HL70076</td><td>http://terminology.hl7.org/CodeSystem/v2-{n}</td><td>HL7 v2 table codes</td></tr>
+                </tbody>
+              </table>
+            </div>
+
+            <!-- ===== FIELD PARSING ===== -->
+            <div class="mapping-section">
+              <h4>HL7 Field Parsing Rules</h4>
+              <table class="mapping-table">
+                <thead><tr><th>Element</th><th>Separator / Format</th><th>Example</th></tr></thead>
+                <tbody>
+                  <tr><td>Field separator</td><td>|</td><td>MSH|…|…</td></tr>
+                  <tr><td>Component separator</td><td>^</td><td>DOE^JANE^M</td></tr>
+                  <tr><td>Repeat separator</td><td>~</td><td>ID1^^^HOSP^MRN~ID2^^^HOSP^EPI</td></tr>
+                  <tr><td>Sub-component separator</td><td>&amp;</td><td>urn:oid:2.16^ISO</td></tr>
+                  <tr><td>Name (XPN)</td><td>family^given^middle^suffix^prefix</td><td>DOE^JANE^M^^DR</td></tr>
+                  <tr><td>Address (XAD)</td><td>street^other^city^state^zip^country^type</td><td>123 MAIN^^CHICAGO^IL^60601^USA</td></tr>
+                  <tr><td>Identifier (CX)</td><td>value^check^authority^facility^type</td><td>12345^^^EPIC^EPI</td></tr>
+                  <tr><td>Provider (XCN)</td><td>id^family^given^middle^suffix^prefix^degree</td><td>12345^SMITH^JOHN^M^JR^DR^MD</td></tr>
+                  <tr><td>Coded (CWE/CE)</td><td>code^display^system^altCode^altDisplay^altSystem</td><td>1234^CBC^LN^5678^Full Blood Count^SCT</td></tr>
+                  <tr><td>Date</td><td>YYYYMMDD</td><td>19850320 → 1985-03-20</td></tr>
+                  <tr><td>DateTime</td><td>YYYYMMDDHHMMSS[.S][±ZZZZ]</td><td>20240315143022 → 2024-03-15T14:30:22</td></tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+
         <div class="convert-bar">
           <button class="btn btn-primary" id="convert-btn">
             <span class="btn-icon">⚡</span>
-            Convert to FHIR
+            <span id="convert-btn-label">Convert to FHIR</span>
           </button>
           <div class="spinner hidden" id="spinner">
             <div class="spin-dot"></div>
@@ -122,10 +529,12 @@ PV1|1|I|ICU^101^A|E|||NPI123^SMITH^JANE|||SUR||||ADM|||V|||||||||||||||||||||||2
         <div class="panel-header">
           <h2 class="panel-title">Output</h2>
           <div class="output-tabs">
-            <button class="tab-btn active" data-out-tab="json">FHIR JSON</button>
-            <button class="tab-btn" data-out-tab="xml">FHIR XML</button>
-            <button class="tab-btn" data-out-tab="readable">Human Readable</button>
-            <button class="tab-btn" data-out-tab="summary">Summary</button>
+            <button class="tab-btn active" data-out-tab="json" id="out-tab-json">FHIR JSON</button>
+            <button class="tab-btn" data-out-tab="xml" id="out-tab-xml">FHIR XML</button>
+            <button class="tab-btn" data-out-tab="readable" id="out-tab-readable">PDF Report</button>
+            <button class="tab-btn" data-out-tab="summary" id="out-tab-summary">Summary</button>
+            <button class="tab-btn" data-out-tab="mappings" id="out-tab-mappings">Field Mappings</button>
+            <button class="tab-btn hidden" data-out-tab="hl7out" id="out-tab-hl7out">HL7 Message</button>
           </div>
         </div>
 
@@ -153,16 +562,15 @@ PV1|1|I|ICU^101^A|E|||NPI123^SMITH^JANE|||SUR||||ADM|||V|||||||||||||||||||||||2
           <pre class="code-block" id="xml-output"></pre>
         </div>
 
-        <!-- Human Readable -->
+        <!-- PDF Report -->
         <div class="out-content" id="out-readable">
           <div class="output-toolbar">
-            <span class="lang-badge lang-text">TEXT</span>
+            <span class="lang-badge lang-pdf">PDF</span>
             <div class="toolbar-actions">
-              <button class="tool-btn" onclick="copyOutput('readable')">📋 Copy</button>
-              <button class="tool-btn" onclick="downloadOutput('readable', 'fhir_report.txt', 'text/plain')">⬇ Download</button>
+              <button class="tool-btn" id="btn-generate-pdf" onclick="generatePDF()">⬇ Download PDF Report</button>
             </div>
           </div>
-          <pre class="code-block readable-block" id="readable-output"></pre>
+          <div class="pdf-preview" id="pdf-preview"></div>
         </div>
 
         <!-- Summary -->
@@ -171,6 +579,26 @@ PV1|1|I|ICU^101^A|E|||NPI123^SMITH^JANE|||SUR||||ADM|||V|||||||||||||||||||||||2
             <span class="lang-badge lang-sum">SUMMARY</span>
           </div>
           <div id="summary-content" class="summary-grid"></div>
+        </div>
+
+        <!-- Field Mappings -->
+        <div class="out-content" id="out-mappings">
+          <div class="output-toolbar">
+            <span class="lang-badge lang-map">MAPPINGS</span>
+          </div>
+          <div id="mappings-content" class="mappings-container"></div>
+        </div>
+
+        <!-- HL7 Output (FHIR→HL7 direction) -->
+        <div class="out-content" id="out-hl7out">
+          <div class="output-toolbar">
+            <span class="lang-badge lang-hl7out">HL7</span>
+            <div class="toolbar-actions">
+              <button class="tool-btn" onclick="copyOutput('hl7out')">📋 Copy</button>
+              <button class="tool-btn" onclick="downloadOutput('hl7out', 'message.hl7', 'text/plain')">⬇ Download</button>
+            </div>
+          </div>
+          <pre class="code-block" id="hl7out-output"></pre>
         </div>
       </section>
 
@@ -182,6 +610,8 @@ PV1|1|I|ICU^101^A|E|||NPI123^SMITH^JANE|||SUR||||ADM|||V|||||||||||||||||||||||2
     <p>HL7 → FHIR Converter · FHIR R4 · Built with FastAPI &amp; Python</p>
   </footer>
 
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.8.2/jspdf.plugin.autotable.min.js"></script>
   <script src="/static/js/app.js"></script>
 </body>
 </html>

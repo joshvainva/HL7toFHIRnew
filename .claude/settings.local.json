@@ -1,0 +1,15 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(python -c \":*)",
+      "Bash(python -m pytest tests/ -q)",
+      "Bash(python tests/test_converter.py)",
+      "Bash(python -c \"import app.core.mapper; print\\(dir\\(app.core.mapper\\)\\)\")",
+      "Bash(python -c \"import app.core.parser; print\\([x for x in dir\\(app.core.parser\\) if not x.startswith\\(''_''\\)]\\)\")",
+      "Bash(python tmp_test_complex.py)",
+      "Bash(python -c \"from app.core.parser import HL7Parser; p=HL7Parser\\(\\); m=p.parse\\(''MSH|^~\\\\&|A|B|C|D|20260101||ORU^R01|X|P|2.5\\\\rPID|1\\\\r''\\); print\\([a for a in dir\\(m\\) if not a.startswith\\(''_''\\)]\\)\")",
+      "Bash(del \"c:\\\\Users\\\\jkoilraj\\\\OneDrive - InnovaSolutions\\\\Documents\\\\AI\\\\HL7toFHIR\\\\tmp_test_complex.py\")",
+      "Bash(node --check \"static/js/app.js\")"
+    ]
+  }
+}

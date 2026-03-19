@@ -22,9 +22,10 @@ from app.core.parser import ParsedHL7Message
 class ACKConverter(BaseConverter):
     """Converts HL7 ACK messages to FHIR resources."""
 
-    def convert(self, parsed_msg: ParsedHL7Message) -> Tuple[List[Dict[str, Any]], List[str]]:
+    def convert(self, parsed_msg: ParsedHL7Message) -> Tuple[List[Dict[str, Any]], List[str], List[Any]]:
         resources = []
         warnings = []
+        field_mappings = []
 
         operation_outcome_id = make_id()
 
@@ -32,7 +33,7 @@ class ACKConverter(BaseConverter):
         operation_outcome = self._build_operation_outcome(parsed_msg, operation_outcome_id, warnings)
         resources.append(operation_outcome)
 
-        return resources, warnings
+        return resources, warnings, field_mappings
 
     def _build_operation_outcome(self, parsed_msg: ParsedHL7Message, operation_outcome_id: str, warnings: List[str]) -> Dict[str, Any]:
         """Build FHIR OperationOutcome resource from MSA segment."""

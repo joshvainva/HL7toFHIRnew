@@ -15,8 +15,23 @@ class ResourceSummary(BaseModel):
     description: str
 
 
+class FieldMapping(BaseModel):
+    fhir_field: str
+    hl7_segment: str
+    hl7_field: str
+    hl7_value: Optional[str] = None
+    description: str
+
+
+class ResourceMapping(BaseModel):
+    resource_type: str
+    resource_id: str
+    field_mappings: List[FieldMapping] = []
+
+
 class ConversionResult(BaseModel):
     success: bool
+    direction: str = "hl7_to_fhir"
     hl7_version: Optional[str] = None
     message_type: Optional[str] = None
     message_event: Optional[str] = None
@@ -24,8 +39,14 @@ class ConversionResult(BaseModel):
     fhir_xml: Optional[str] = None
     human_readable: Optional[str] = None
     resource_summary: List[ResourceSummary] = []
+    field_mappings: List[ResourceMapping] = []
+    hl7_output: Optional[str] = None
     errors: List[str] = []
     warnings: List[str] = []
+
+
+class FHIRConversionRequest(BaseModel):
+    fhir_bundle: Dict[str, Any] = Field(..., description="FHIR Bundle JSON object")
 
 
 class ErrorResponse(BaseModel):

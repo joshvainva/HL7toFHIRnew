@@ -19,12 +19,13 @@ from app.core.parser import ParsedHL7Message
 class GenericConverter(BaseConverter):
     """Fallback converter for unsupported message types."""
 
-    def convert(self, parsed_msg: ParsedHL7Message) -> Tuple[List[Dict[str, Any]], List[str]]:
+    def convert(self, parsed_msg: ParsedHL7Message) -> Tuple[List[Dict[str, Any]], List[str], List[Any]]:
         resources = []
         warnings = [
             f"Message type '{parsed_msg.message_type}' does not have a dedicated converter. "
             "A best-effort conversion has been performed."
         ]
+        field_mappings = []
 
         # Try to extract a Patient if PID exists
         pid = parsed_msg.get_segment("PID")
@@ -58,4 +59,4 @@ class GenericConverter(BaseConverter):
         }
         resources.append(param_resource)
 
-        return resources, warnings
+        return resources, warnings, field_mappings

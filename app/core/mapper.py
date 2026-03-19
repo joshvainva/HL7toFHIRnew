@@ -15,6 +15,7 @@ from app.converters.dft import DFTConverter
 from app.converters.vxu import VXUConverter
 from app.converters.mfn import MFNConverter
 from app.converters.ack import ACKConverter
+from app.converters.bar import BARConverter
 from app.converters.generic import GenericConverter
 
 
@@ -29,7 +30,7 @@ CONVERTER_REGISTRY: Dict[str, Any] = {
     "VXU": VXUConverter,
     "MFN": MFNConverter,
     "ACK": ACKConverter,
-    # More converters can be registered here
+    "BAR": BARConverter,
 }
 
 
@@ -39,18 +40,18 @@ class FHIRMapper:
     then wraps results in a FHIR Bundle.
     """
 
-    def map(self, parsed_msg: ParsedHL7Message) -> Tuple[Dict[str, Any], List[str]]:
+    def map(self, parsed_msg: ParsedHL7Message) -> Tuple[Dict[str, Any], List[str], List[Any]]:
         """
         Convert parsed HL7 message to FHIR Bundle.
 
         Returns:
-            (fhir_bundle_dict, list_of_warnings)
+            (fhir_bundle_dict, list_of_warnings, list_of_field_mappings)
         """
         msg_type = parsed_msg.message_type.upper()
         converter_class = CONVERTER_REGISTRY.get(msg_type, GenericConverter)
         converter = converter_class()
 
-        resources, warnings = converter.convert(parsed_msg)
+        resources, warnings, field_mappings = converter.convert(parsed_msg)
         bundle = build_bundle(resources, bundle_type="collection")
 
-        return bundle, warnings
+        return bundle, warnings, field_mappings

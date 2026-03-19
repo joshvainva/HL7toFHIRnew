@@ -135,15 +135,56 @@ def extract_telecom(phone_field: Any, email_field: Any = None) -> List[Dict[str,
 
 
 def extract_identifier(id_field: Any, system_prefix: str = "urn:hl7:id") -> Dict[str, Any]:
-    """Build a FHIR Identifier from an HL7 CX field (id^check^authority)."""
+    """
+    Build a FHIR Identifier from an HL7 CX field.
+    CX format: id^check^authority^facility^id_type_code
+
+    Handles Epic/EHR-specific identifier types:
+      EPI  → Epic Internal Patient ID  (urn:oid:1.2.840.114350.1.13)
+      MRN/MR → Medical Record Number   (http://hospital.example.org/mrn)
+      NPI  → National Provider ID      (http://hl7.org/fhir/sid/us-npi)
+      SS   → Social Security Number    (http://hl7.org/fhir/sid/us-ssn)
+      PI   → Patient Internal ID       (system_prefix)
+      AN   → Account Number            (http://hospital.example.org/account)
+    """
     parts = str(id_field).split("^")
-    value = parts[0].strip() if parts else ""
+    value     = parts[0].strip() if parts else ""
     authority = parts[2].strip() if len(parts) > 2 else ""
+    id_type   = parts[4].strip().upper() if len(parts) > 4 else ""
+
+    # Epic/EHR identifier type → FHIR system mapping
+    EPIC_ID_SYSTEMS: Dict[str, str] = {
+        "EPI":  "urn:oid:1.2.840.114350.1.13",        # Epic Internal ID
+        "MRN":  "http://hospital.example.org/mrn",
+        "MR":   "http://hospital.example.org/mrn",
+        "NPI":  "http://hl7.org/fhir/sid/us-npi",
+        "SS":   "http://hl7.org/fhir/sid/us-ssn",
+        "SSN":  "http://hl7.org/fhir/sid/us-ssn",
+        "PI":   system_prefix,
+        "AN":   "http://hospital.example.org/account",
+        "VN":   "http://hospital.example.org/visit",
+        "EN":   "http://hospital.example.org/enterprise",  # Enterprise ID
+    }
+
     ident: Dict[str, Any] = {"value": value}
-    if authority:
+
+    if id_type in EPIC_ID_SYSTEMS:
+        ident["system"] = EPIC_ID_SYSTEMS[id_type]
+        # Add type coding for clarity
+        ident["type"] = {
+            "coding": [{"system": "http://terminology.hl7.org/CodeSystem/v2-0203", "code": id_type}]
+        }
+    elif authority:
         ident["system"] = f"{system_prefix}:{authority}"
     else:
         ident["system"] = system_prefix
+
+    # Always carry the assigning authority as extension if present
+    if authority and id_type not in EPIC_ID_SYSTEMS:
+        pass  # already encoded in system
+    elif authority and id_type in EPIC_ID_SYSTEMS:
+        ident["assigner"] = {"display": authority}
+
     return ident
 
 
@@ -202,6 +243,51 @@ def map_coding_system(system: str) -> str:
     return mapping.get(system.upper(), f"urn:oid:{system}" if system else "")
 
 
+def map_z_segments_to_extensions(parsed_msg: Any) -> List[Dict[str, Any]]:
+    """
+    Extract all Z-segment fields into a list of FHIR Extension objects.
+
+    Epic/EHR Z-segments (ZPD, ZEP, ZAL, ZDS, ZCM, etc.) carry
+    proprietary data not representable in standard HL7. We map each
+    non-empty field to a FHIR extension so no data is lost.
+
+    Returns a (possibly empty) list of FHIR Extension dicts.
+    """
+    extensions: List[Dict[str, Any]] = []
+    # Segment names starting with Z are proprietary
+    z_names = [
+        name for name in ["ZPD", "ZEP", "ZAL", "ZDS", "ZCM", "ZFX",
+                          "ZIN", "ZPI", "ZSF", "ZVS", "ZPA"]
+        if parsed_msg.get_segment(name) is not None
+    ]
+    # Also scan raw message for any Z-segment not in the list above
+    for seg in getattr(parsed_msg, '_segments', []):
+        try:
+            name = str(seg[0]).upper()
+            if name.startswith("Z") and name not in z_names:
+                z_names.append(name)
+        except Exception:
+            pass
+
+    for z_name in z_names:
+        seg = parsed_msg.get_segment(z_name)
+        if seg is None:
+            continue
+        try:
+            for i in range(1, len(seg)):
+                val = safe_str(seg[i])
+                if not val:
+                    continue
+                extensions.append({
+                    "url": f"urn:epic:z-segment:{z_name.lower()}-{i}",
+                    "valueString": val,
+                })
+        except Exception:
+            continue
+
+    return extensions
+
+
 def build_bundle(resources: List[Dict[str, Any]], bundle_type: str = "collection") -> Dict[str, Any]:
     """Wrap FHIR resources into a FHIR Bundle."""
     entries = []
@@ -225,11 +311,11 @@ def build_bundle(resources: List[Dict[str, Any]], bundle_type: str = "collection
 class BaseConverter:
     """Base class for all HL7 → FHIR converters."""
 
-    def convert(self, parsed_msg) -> Tuple[List[Dict[str, Any]], List[str]]:
+    def convert(self, parsed_msg) -> Tuple[List[Dict[str, Any]], List[str], List[Any]]:
         """
         Convert a ParsedHL7Message into a list of FHIR resource dicts.
 
         Returns:
-            (resources, warnings)
+            (resources, warnings, field_mappings)
         """
         raise NotImplementedError
