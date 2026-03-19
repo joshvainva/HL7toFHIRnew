@@ -125,6 +125,37 @@ let currentResult = null;
 let uploadedFile = null;
 let historyItems = [];
 let conversionDirection = 'hl7_to_fhir';
+let aiModeEnabled = false;
+
+// ---------------------------------------------------------------------------
+// AI Mode Toggle
+// ---------------------------------------------------------------------------
+window.toggleAIMode = function() {
+  aiModeEnabled = !aiModeEnabled;
+  const sw = document.getElementById('ai-toggle-switch');
+  const badge = document.getElementById('ai-mode-badge');
+  const banner = document.getElementById('ai-active-banner');
+  const convertBtnEl = document.getElementById('convert-btn');
+  const btnIcon = document.getElementById('convert-btn-icon');
+  const spinnerLabel = document.getElementById('spinner-label');
+  const aiOutputBadge = document.getElementById('ai-output-badge');
+
+  sw.classList.toggle('on', aiModeEnabled);
+  badge.classList.toggle('hidden', !aiModeEnabled);
+  banner.classList.toggle('hidden', !aiModeEnabled);
+  convertBtnEl.classList.toggle('ai-btn', aiModeEnabled);
+
+  if (aiModeEnabled) {
+    btnIcon.textContent = '✨';
+    spinnerLabel.textContent = 'AI Converting…';
+  } else {
+    btnIcon.textContent = '⚡';
+    spinnerLabel.textContent = 'Converting…';
+  }
+
+  // Hide AI output badge until next conversion
+  if (aiOutputBadge) aiOutputBadge.classList.add('hidden');
+};
 
 // ---------------------------------------------------------------------------
 // Direction toggle
@@ -363,7 +394,11 @@ convertBtn.addEventListener('click', async () => {
         showError('Invalid JSON: ' + e.message, []);
         return;
       }
-      await convertFhirToHl7(bundle);
+      if (aiModeEnabled) {
+        await aiConvertFhirToHl7(bundle);
+      } else {
+        await convertFhirToHl7(bundle);
+      }
     }
     return;
   }
@@ -380,7 +415,11 @@ convertBtn.addEventListener('click', async () => {
       showError('Please paste an HL7 message or load a sample.', []);
       return;
     }
-    await convertText(text);
+    if (aiModeEnabled) {
+      await aiConvertHl7ToFhir(text);
+    } else {
+      await convertText(text);
+    }
   }
 });
 
@@ -460,6 +499,51 @@ async function convertFhirFileToHl7(file) {
   }
 }
 
+// ---------------------------------------------------------------------------
+// AI conversion functions
+// ---------------------------------------------------------------------------
+async function aiConvertHl7ToFhir(text) {
+  setLoading(true);
+  try {
+    const resp = await fetch(API_BASE + '/api/convert/ai/hl7-to-fhir', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ hl7_message: text }),
+    });
+    const data = await resp.json();
+    if (!resp.ok) {
+      showError(data.detail || 'AI conversion failed.', []);
+    } else {
+      handleResult(data);
+    }
+  } catch (err) {
+    showError('Network error: ' + err.message, []);
+  } finally {
+    setLoading(false);
+  }
+}
+
+async function aiConvertFhirToHl7(bundle) {
+  setLoading(true);
+  try {
+    const resp = await fetch(API_BASE + '/api/convert/ai/fhir-to-hl7', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ fhir_bundle: bundle }),
+    });
+    const data = await resp.json();
+    if (!resp.ok) {
+      showError(data.detail || 'AI conversion failed.', []);
+    } else {
+      handleResult(data);
+    }
+  } catch (err) {
+    showError('Network error: ' + err.message, []);
+  } finally {
+    setLoading(false);
+  }
+}
+
 async function convertFile() {
   setLoading(true);
   try {
@@ -505,6 +589,10 @@ function handleResult(result) {
     return;
   }
 
+  // Show/hide AI output badge
+  const aiOutputBadge = document.getElementById('ai-output-badge');
+  if (aiOutputBadge) aiOutputBadge.classList.toggle('hidden', !result.ai_powered);
+
   const isFhirToHl7 = result.direction === 'fhir_to_hl7';
 
   // Status bar
@@ -535,6 +623,13 @@ function handleResult(result) {
   // HL7 output (FHIR→HL7 direction)
   const hl7outEl = document.getElementById('hl7out-output');
   if (hl7outEl) hl7outEl.textContent = result.hl7_output ? result.hl7_output.replace(/\r/g, '\n') : '';
+
+  // Show mappings tab for FHIR→HL7 direction when AI mode provides them
+  const mappingsTab = document.getElementById('out-tab-mappings');
+  if (mappingsTab && isFhirToHl7) {
+    const hasMappings = (result.field_mappings || []).length > 0;
+    mappingsTab.classList.toggle('hidden', !hasMappings);
+  }
 
   // Activate the correct output tab for the current direction
   document.querySelectorAll('.output-tabs .tab-btn').forEach(b => b.classList.remove('active'));
@@ -588,10 +683,10 @@ function handleResult(result) {
     const thead = document.createElement('thead');
     thead.innerHTML = `
       <tr>
-        <th>FHIR Field</th>
-        <th>HL7 Segment.Field</th>
-        <th>HL7 Value</th>
-        <th>Description</th>
+        <th style="width:20%">FHIR Field</th>
+        <th style="width:15%">HL7 Segment.Field</th>
+        <th style="width:35%">HL7 Value</th>
+        <th style="width:30%">Description</th>
       </tr>
     `;
     table.appendChild(thead);
@@ -666,13 +761,15 @@ function renderPDFPreview(result) {
 
   mappings.forEach(rm => {
     html += `<div class="pdf-prev-section"><div class="pdf-prev-section-title">${escapeHtml(rm.resource_type)} — ${escapeHtml(rm.resource_id)}</div>
-      <table class="pdf-prev-table"><thead><tr><th>FHIR Field</th><th>HL7 Segment.Field</th><th>HL7 Value</th><th>Description</th></tr></thead><tbody>`;
+      <table class="pdf-prev-table pdf-mapping-table" style="table-layout:fixed;width:100%">
+        <colgroup><col style="width:20%"><col style="width:15%"><col style="width:35%"><col style="width:30%"></colgroup>
+        <thead><tr><th>FHIR Field</th><th>HL7 Segment.Field</th><th>HL7 Value</th><th>Description</th></tr></thead><tbody>`;
     (rm.field_mappings || []).forEach(f => {
       html += `<tr>
-        <td class="mono">${escapeHtml(f.fhir_field)}</td>
-        <td><span class="mapping-hl7-segment">${escapeHtml(f.hl7_segment)}</span> <span class="mapping-hl7-field">${escapeHtml(f.hl7_field)}</span></td>
-        <td class="mono trunc" title="${escapeHtml(f.hl7_value||'')}">${escapeHtml((f.hl7_value||'N/A').substring(0,60))}</td>
-        <td>${escapeHtml(f.description)}</td>
+        <td class="mono" style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${escapeHtml(f.fhir_field)}</td>
+        <td style="white-space:nowrap"><span class="mapping-hl7-segment">${escapeHtml(f.hl7_segment)}</span> <span class="mapping-hl7-field">${escapeHtml(f.hl7_field)}</span></td>
+        <td class="mono" style="word-break:break-all;white-space:normal" title="${escapeHtml(f.hl7_value||'')}">${escapeHtml(f.hl7_value||'N/A')}</td>
+        <td style="white-space:normal">${escapeHtml(f.description)}</td>
       </tr>`;
     });
     html += `</tbody></table></div>`;
@@ -760,20 +857,27 @@ window.generatePDF = function() {
     doc.text(`${rm.resource_type}  —  ${rm.resource_id}`, margin, y);
     y += 2;
     doc.setTextColor(0, 0, 0);
+    const tableWidth = pageW - margin * 2;
     doc.autoTable({
       startY: y,
       margin: { left: margin, right: margin },
-      headStyles: { fillColor: [51, 102, 204], textColor: 255, fontStyle: 'bold', fontSize: 7.5 },
-      bodyStyles: { fontSize: 7 },
+      tableWidth: tableWidth,
+      headStyles: { fillColor: [51, 102, 204], textColor: 255, fontStyle: 'bold', fontSize: 7.5, halign: 'left' },
+      bodyStyles: { fontSize: 7, valign: 'top', overflow: 'linebreak' },
       alternateRowStyles: { fillColor: [245, 247, 255] },
       head: [['FHIR Field', 'HL7 Segment.Field', 'HL7 Value', 'Description']],
       body: (rm.field_mappings || []).map(f => [
         f.fhir_field,
-        `${f.hl7_segment} ${f.hl7_field}`,
-        (f.hl7_value || 'N/A').substring(0, 60),
+        `${f.hl7_segment}  ${f.hl7_field}`,
+        f.hl7_value || 'N/A',
         f.description,
       ]),
-      columnStyles: { 0: { cellWidth: 38 }, 1: { cellWidth: 28 }, 2: { cellWidth: 42 } },
+      columnStyles: {
+        0: { cellWidth: tableWidth * 0.20, fontStyle: 'bold' },
+        1: { cellWidth: tableWidth * 0.15 },
+        2: { cellWidth: tableWidth * 0.35, font: 'courier', fontSize: 6.5 },
+        3: { cellWidth: tableWidth * 0.30 },
+      },
     });
     y = doc.lastAutoTable.finalY + 8;
   });

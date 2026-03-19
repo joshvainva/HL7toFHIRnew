@@ -590,26 +590,64 @@ body {
   width: 100%;
   border-collapse: collapse;
   font-size: 0.8rem;
-}
-
-.mapping-table th,
-.mapping-table td {
-  padding: 0.5rem 0.75rem;
-  text-align: left;
-  border-bottom: 1px solid var(--border-light);
+  table-layout: fixed;
 }
 
 .mapping-table th {
-  background: var(--bg-code);
+  background: var(--accent);
+  color: #fff;
   font-weight: 600;
   font-size: 0.75rem;
   text-transform: uppercase;
   letter-spacing: 0.05em;
+  padding: 0.55rem 0.75rem;
+  text-align: left;
+  overflow: hidden;
+  white-space: nowrap;
+}
+
+.mapping-table td {
+  padding: 0.45rem 0.75rem;
+  text-align: left;
+  border-bottom: 1px solid var(--border-light);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  vertical-align: middle;
+}
+
+/* col 1 — FHIR Field: truncate silently */
+.mapping-table td:nth-child(1) {
+  font-family: var(--mono);
+  font-weight: 600;
+  color: var(--accent);
+}
+
+/* col 2 — Segment.Field: fixed, badges fit */
+.mapping-table td:nth-child(2) {
+  white-space: nowrap;
+}
+
+/* col 3 — HL7 Value: wrap long values */
+.mapping-table td:nth-child(3) {
+  white-space: normal;
+  word-break: break-all;
+  line-height: 1.4;
+}
+
+/* col 4 — Description: wrap naturally */
+.mapping-table td:nth-child(4) {
+  white-space: normal;
   color: var(--text-muted);
+  line-height: 1.4;
+}
+
+.mapping-table tbody tr:nth-child(even) {
+  background: rgba(102, 126, 234, 0.03);
 }
 
 .mapping-table tbody tr:hover {
-  background: rgba(102, 126, 234, 0.02);
+  background: rgba(102, 126, 234, 0.07);
 }
 
 .mapping-fhir-field {
@@ -645,10 +683,12 @@ body {
   padding: 0.2rem 0.4rem;
   border-radius: 3px;
   font-size: 0.75rem;
-  max-width: 200px;
+  display: inline-block;
+  max-width: 100%;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+  vertical-align: middle;
 }
 
 .mapping-description {
@@ -878,61 +918,7 @@ body {
   color: var(--text-muted);
 }
 
-/* ===== MAPPING TABLES ===== */
-.mapping-table {
-  width: 100%;
-  border-collapse: collapse;
-  margin: 1rem 0;
-  font-size: 0.85rem;
-  background: var(--bg-panel-2);
-  border-radius: var(--radius-sm);
-  overflow: hidden;
-  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
-}
-
-.mapping-table th {
-  background: var(--accent);
-  color: white;
-  padding: 0.75rem 0.5rem;
-  text-align: left;
-  font-weight: 600;
-  font-size: 0.8rem;
-  text-transform: uppercase;
-  letter-spacing: 0.5px;
-}
-
-.mapping-table td {
-  padding: 0.5rem;
-  border-bottom: 1px solid var(--border-light);
-  vertical-align: top;
-}
-
-.mapping-table tbody tr:nth-child(even) {
-  background: rgba(255, 255, 255, 0.3);
-}
-
-.mapping-table tbody tr:hover {
-  background: var(--accent-glow);
-}
-
-.mapping-table td:first-child {
-  font-weight: 600;
-  color: var(--text);
-  font-family: var(--mono);
-  font-size: 0.8rem;
-}
-
-.mapping-table td:nth-child(2) {
-  font-family: var(--mono);
-  font-weight: 500;
-  color: var(--purple);
-  background: rgba(159, 122, 234, 0.05);
-}
-
-.mapping-table td:nth-child(3) {
-  color: var(--text-muted);
-  line-height: 1.4;
-}
+/* ===== MAPPING TABLES (duplicate removed — canonical definition above) ===== */
 
 /* ===== FOOTER ===== */
 .footer {
@@ -1016,15 +1002,27 @@ body {
   padding: 0.4rem 0.6rem;
   text-align: left;
   font-weight: 600;
+  white-space: nowrap;
+  overflow: hidden;
 }
 .pdf-prev-table tbody tr:nth-child(even) { background: #eff6ff; }
 .pdf-prev-table tbody td {
   padding: 0.35rem 0.6rem;
   border-bottom: 1px solid var(--border);
   vertical-align: top;
+  overflow: hidden;
 }
-.pdf-prev-table .mono { font-family: var(--font-mono); font-size: 0.75rem; }
-.pdf-prev-table .trunc { max-width: 160px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.pdf-prev-table .mono { font-family: var(--mono); font-size: 0.75rem; }
+
+/* Fixed-width mapping table inside PDF preview — matches UI mapping-table */
+.pdf-mapping-table thead th:nth-child(1) { width: 20%; }
+.pdf-mapping-table thead th:nth-child(2) { width: 15%; }
+.pdf-mapping-table thead th:nth-child(3) { width: 35%; }
+.pdf-mapping-table thead th:nth-child(4) { width: 30%; }
+.pdf-mapping-table tbody td:nth-child(1) { white-space: nowrap; text-overflow: ellipsis; }
+.pdf-mapping-table tbody td:nth-child(2) { white-space: nowrap; }
+.pdf-mapping-table tbody td:nth-child(3) { word-break: break-all; white-space: normal; font-family: var(--mono); font-size: 0.72rem; }
+.pdf-mapping-table tbody td:nth-child(4) { white-space: normal; color: var(--text-muted); }
 .rt-badge {
   display: inline-block;
   padding: 0.1rem 0.45rem;
@@ -1033,4 +1031,96 @@ body {
   font-weight: 600;
   background: rgba(102,126,234,0.12);
   color: var(--accent);
+}
+
+/* ===== AI MODE TOGGLE ===== */
+.ai-toggle-wrap {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin-left: 1.2rem;
+}
+.ai-toggle-label {
+  font-size: 0.82rem;
+  font-weight: 600;
+  color: var(--text-muted);
+  white-space: nowrap;
+  cursor: pointer;
+  user-select: none;
+}
+.ai-toggle-label .ai-icon { font-size: 1rem; }
+
+.ai-toggle-switch {
+  width: 44px;
+  height: 24px;
+  background: #cbd5e0;
+  border-radius: 999px;
+  position: relative;
+  cursor: pointer;
+  transition: background 0.25s;
+  flex-shrink: 0;
+}
+.ai-toggle-switch.on {
+  background: linear-gradient(90deg, #667eea, #9f7aea);
+  box-shadow: 0 0 10px rgba(102,126,234,0.45);
+}
+.ai-toggle-knob {
+  position: absolute;
+  top: 3px;
+  left: 3px;
+  width: 18px;
+  height: 18px;
+  background: #fff;
+  border-radius: 50%;
+  transition: left 0.25s;
+  box-shadow: 0 1px 4px rgba(0,0,0,0.2);
+}
+.ai-toggle-switch.on .ai-toggle-knob { left: 23px; }
+
+.ai-mode-badge {
+  font-size: 0.7rem;
+  font-weight: 700;
+  background: linear-gradient(90deg, #667eea, #9f7aea);
+  color: #fff;
+  padding: 0.15rem 0.55rem;
+  border-radius: 999px;
+  letter-spacing: 0.03em;
+}
+
+/* ===== AI ACTIVE BANNER ===== */
+.ai-active-banner {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  font-size: 0.8rem;
+  color: #553c9a;
+  background: linear-gradient(90deg, rgba(102,126,234,0.12), rgba(159,122,234,0.12));
+  border: 1px solid rgba(102,126,234,0.25);
+  border-radius: 999px;
+  padding: 0.3rem 0.8rem;
+  margin-left: 0.75rem;
+}
+.gemini-brand {
+  font-weight: 700;
+  background: linear-gradient(90deg, #4285f4, #9f7aea);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+}
+
+/* ===== AI OUTPUT BADGE ===== */
+.ai-output-badge {
+  font-size: 0.72rem;
+  font-weight: 700;
+  background: linear-gradient(90deg, #667eea, #9f7aea);
+  color: #fff;
+  padding: 0.15rem 0.6rem;
+  border-radius: 999px;
+  margin-left: 0.5rem;
+  vertical-align: middle;
+}
+
+/* Convert button AI state */
+.btn-primary.ai-btn {
+  background: linear-gradient(135deg, #667eea 0%, #9f7aea 100%);
+  box-shadow: 0 4px 15px rgba(102,126,234,0.4);
 }

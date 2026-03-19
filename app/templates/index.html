@@ -28,6 +28,17 @@
         <button class="dir-btn active" id="btn-hl7-to-fhir" onclick="setDirection('hl7_to_fhir')">HL7 → FHIR</button>
         <button class="dir-btn" id="btn-fhir-to-hl7" onclick="setDirection('fhir_to_hl7')">FHIR → HL7</button>
       </div>
+
+      <!-- AI Mode Toggle -->
+      <div class="ai-toggle-wrap" id="ai-toggle-wrap">
+        <label class="ai-toggle-label" for="ai-toggle-switch">
+          <span class="ai-icon">✨</span> AI Mode
+        </label>
+        <div class="ai-toggle-switch" id="ai-toggle-switch" onclick="toggleAIMode()" title="Switch between manual code conversion and Groq AI conversion">
+          <span class="ai-toggle-knob" id="ai-toggle-knob"></span>
+        </div>
+        <span class="ai-mode-badge hidden" id="ai-mode-badge">Groq</span>
+      </div>
     </div>
   </header>
 
@@ -498,12 +509,15 @@ Example:
 
         <div class="convert-bar">
           <button class="btn btn-primary" id="convert-btn">
-            <span class="btn-icon">⚡</span>
+            <span class="btn-icon" id="convert-btn-icon">⚡</span>
             <span id="convert-btn-label">Convert to FHIR</span>
           </button>
           <div class="spinner hidden" id="spinner">
             <div class="spin-dot"></div>
-            <span>Converting…</span>
+            <span id="spinner-label">Converting…</span>
+          </div>
+          <div class="ai-active-banner hidden" id="ai-active-banner">
+            ✨ <strong>AI Mode ON</strong> — Powered by <span class="gemini-brand">Groq AI (Llama 3.3)</span>
           </div>
         </div>
       </section>
@@ -527,7 +541,7 @@ Example:
       <!-- ===== OUTPUT PANEL ===== -->
       <section class="panel output-panel hidden" id="output-panel">
         <div class="panel-header">
-          <h2 class="panel-title">Output</h2>
+          <h2 class="panel-title">Output <span class="ai-output-badge hidden" id="ai-output-badge">✨ AI Generated</span></h2>
           <div class="output-tabs">
             <button class="tab-btn active" data-out-tab="json" id="out-tab-json">FHIR JSON</button>
             <button class="tab-btn" data-out-tab="xml" id="out-tab-xml">FHIR XML</button>

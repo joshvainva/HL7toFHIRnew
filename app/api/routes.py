@@ -3,9 +3,20 @@ API routes for the HL7 → FHIR converter.
 """
 import json
 import logging
+import os
 import uuid
 from datetime import datetime
 from typing import List, Optional
+
+# Load .env so GROQ_API_KEY is available without python-dotenv dependency
+_env_path = os.path.join(os.path.dirname(__file__), "..", "..", ".env")
+if os.path.exists(_env_path):
+    with open(_env_path) as _f:
+        for _line in _f:
+            _line = _line.strip()
+            if _line and not _line.startswith("#") and "=" in _line:
+                _k, _v = _line.split("=", 1)
+                os.environ.setdefault(_k.strip(), _v.strip())
 
 from fastapi import APIRouter, File, Form, HTTPException, UploadFile, status
 from fastapi.responses import JSONResponse, PlainTextResponse, Response
@@ -303,6 +314,101 @@ async def convert_fhir_to_hl7(payload: dict) -> ConversionResult:
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Internal conversion error: {exc}",
         )
+
+
+@router.post(
+    "/convert/ai/hl7-to-fhir",
+    summary="AI-powered HL7 → FHIR conversion via Gemini",
+)
+async def ai_convert_hl7_to_fhir(payload: dict):
+    from app.core.llm_converter import convert_hl7_to_fhir_via_llm
+    raw = payload.get("hl7_message", "").strip()
+    if not raw:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail="Field 'hl7_message' is required.",
+        )
+    try:
+        result = convert_hl7_to_fhir_via_llm(raw)
+    except RuntimeError as exc:
+        raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail=str(exc))
+    except Exception as exc:
+        logger.exception("AI HL7→FHIR error")
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(exc))
+
+    # Save to history
+    if result.get("success"):
+        history_item = HistoryItem(
+            id=str(uuid.uuid4()),
+            timestamp=datetime.now().isoformat(),
+            hl7_version=result.get("hl7_version", "2.5"),
+            message_type=result.get("message_type"),
+            message_event=result.get("message_event"),
+            input_type="ai",
+            input_name="AI conversion",
+            success=True,
+            hl7_content=raw,
+            fhir_json=result.get("fhir_json"),
+            fhir_xml=result.get("fhir_xml", ""),
+            warnings=result.get("warnings", []),
+        )
+        history.add_conversion(history_item)
+
+    return result
+
+
+@router.post(
+    "/convert/ai/fhir-to-hl7",
+    summary="AI-powered FHIR → HL7 conversion via Gemini",
+)
+async def ai_convert_fhir_to_hl7(payload: dict):
+    from app.core.llm_converter import convert_fhir_to_hl7_via_llm
+    bundle = payload.get("fhir_bundle")
+    if not bundle:
+        if payload.get("resourceType") == "Bundle":
+            bundle = payload
+    if not bundle:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail="Field 'fhir_bundle' is required.",
+        )
+    try:
+        result = convert_fhir_to_hl7_via_llm(bundle)
+    except RuntimeError as exc:
+        raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail=str(exc))
+    except Exception as exc:
+        logger.exception("AI FHIR→HL7 error")
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(exc))
+
+    # Save to history
+    if result.get("success"):
+        history_item = HistoryItem(
+            id=str(uuid.uuid4()),
+            timestamp=datetime.now().isoformat(),
+            hl7_version="2.5",
+            message_type=result.get("message_type"),
+            message_event=None,
+            input_type="ai",
+            input_name="AI conversion",
+            success=True,
+            hl7_content="",
+            direction="fhir_to_hl7",
+            fhir_json=bundle,
+            hl7_output=result.get("hl7_output", ""),
+            warnings=result.get("warnings", []),
+        )
+        history.add_conversion(history_item)
+
+    return result
+
+
+@router.get(
+    "/ai/status",
+    summary="Check if AI (Groq) is configured",
+)
+async def ai_status():
+    key = os.environ.get("GROQ_API_KEY", "")
+    return {"configured": bool(key), "model": "llama-3.3-70b-versatile", "provider": "Groq"}
 
 
 @router.get(
