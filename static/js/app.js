@@ -330,7 +330,10 @@ let aiModeEnabled = false;
 // AI Mode Toggle
 // ---------------------------------------------------------------------------
 window.toggleAIMode = function() {
-  aiModeEnabled = !aiModeEnabled;
+  const checkbox = document.getElementById('ai-toggle-checkbox');
+  if (checkbox) {
+    aiModeEnabled = checkbox.checked;
+  }
   const sw = document.getElementById('ai-toggle-switch');
   const badge = document.getElementById('ai-mode-badge');
   const banner = document.getElementById('ai-active-banner');

@@ -34,12 +34,14 @@
 
       <!-- AI Mode Toggle -->
       <div class="ai-toggle-wrap" id="ai-toggle-wrap">
-        <label class="ai-toggle-label" for="ai-toggle-switch">
+        <label class="ai-toggle-label" for="ai-toggle-checkbox">
           <span class="ai-icon">✨</span> AI Mode
         </label>
-        <div class="ai-toggle-switch" id="ai-toggle-switch" onclick="toggleAIMode()" title="Switch between manual code conversion and Groq AI conversion">
+        <!-- AI Mode Toggle Switch -->
+        <label class="ai-toggle-switch" id="ai-toggle-switch" title="Switch between manual code conversion and Groq AI conversion">
+          <input type="checkbox" id="ai-toggle-checkbox" class="hidden" onchange="toggleAIMode()" style="display:none" />
           <span class="ai-toggle-knob" id="ai-toggle-knob"></span>
-        </div>
+        </label>
         <span class="ai-mode-badge hidden" id="ai-mode-badge">Groq</span>
       </div>
     </div>
