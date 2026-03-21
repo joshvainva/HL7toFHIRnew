@@ -1,196 +1,81 @@
-# HL7toFHIR message converter
+# HL7 & EHR → FHIR Converter
 
-A production-ready web application that converts **HL7 v2.x** messages into **FHIR R4** resources.
+A premium, production-ready healthcare interoperability platform that converts **HL7 v2.x** and **Raw EHR Data** into **FHIR R4** resources. Designed for high-end presentation and automated clinical data mapping.
 
-## Features
+## ✨ Premium Features
 
-| Feature | Details |
+| Category | Capability |
 |---|---|
-| **HL7 Detection** | Auto-detects version (2.3–2.8+) and message type (ADT, ORU, ORM, SIU, MDM, DFT, VXU, MFN, ACK) |
-| **FHIR Output** | Produces FHIR R4 Bundle with proper references and IDs |
-| **Supported Types** | ADT→Patient/Encounter/Practitioner, ORU→Observation/DiagnosticReport, ORM→ServiceRequest, SIU→Appointment/Patient, MDM→DocumentReference, DFT→Claim, VXU→Immunization, MFN→Organization/Practitioner/Location, ACK→OperationOutcome |
-| **Input Methods** | Paste text · Upload .hl7 · .txt · .csv · .xlsx · .xls · .docx |
-| **Output Formats** | FHIR JSON · FHIR XML · Human-readable report |
-| **UI** | Dark-mode responsive web UI with copy/download per format |
-| **Deployment** | Docker + docker-compose ready |
+| **EHR Logic** | **AI-Powered Conversion** for raw unstructured clinical data (Epic, Cerner, Meditech, etc.) |
+| **HL7 Engine** | Auto-detects version (2.3–2.8+) and message types (ADT, ORU, ORM, SIU, MDM, etc.) |
+| **Premium UI** | **Dark Glassmorphism** design with animated backgrounds and branded Innova watermarks |
+| **Styled Exports**| **Excel (Styled)** with brand-consistent headers, **CSV**, and human-readable **PDF Reports** |
+| **Batch Support**| **Multi-Patient Processing** with automatic ZIP packaging and context partitioning |
+| **Audit Ready** | **Sequential Timestamping** on all export filenames for easy tracking and versioning |
 
----
-
-## Quick Start
-
-### Option 1 — Docker Compose (recommended)
+## 🚀 Quick Start (Docker)
 
 ```bash
-# Clone / enter project directory
-cd hl7-fhir-converter
-
-# Build and start
+# Build and start the platform
 docker compose up --build
 
 # Open browser
 open http://localhost:8000
 ```
 
-### Option 2 — Docker
+## 🏥 Supported Data Types
 
-```bash
-docker build -t hl7-fhir-converter .
-docker run -p 8000:8000 hl7-fhir-converter
-```
+### Standard HL7 v2
+- **ADT**: Patient, Encounter, Practitioner, Organization
+- **ORU**: Patient, DiagnosticReport, Observation
+- **ORM**: Patient, ServiceRequest, Practitioner
+- **SIU/MDM/DFT/VXU/MFN**: Full mapping support for all major segments.
 
-### Option 3 — Local Python
-
-```bash
-# Create virtual environment
-python -m venv venv
-source venv/bin/activate          # Windows: venv\Scripts\activate
-
-# Install dependencies
-pip install -r requirements.txt
-
-# Run
-uvicorn app.main:app --reload --port 8000
-
-# Open browser
-open http://localhost:8000
-```
+### EHR Raw Data (AI-Driven)
+- Supports structured and unstructured text from major vendors:
+  - **Epic** / **Cerner** / **Meditech** / **Allscripts** / **Athena**
+- Converts clinical notes, patient summaries, and demographics directly to FHIR R4.
 
 ---
 
-## Configuration
+## 🎨 UI & Branding
+The application features a **Premium Dark UI Overhaul**:
+- **Branded Innova Logo**: Integrated into the header and browser tab (favicon).
+- **Background Watermarks**: 20% opacity logo branding behind all input and output fields.
+- **Glassmorphism Panels**: Semi-transparent containers with backdrop-blur for a modernized clinical feel.
+- **Electric Accents**: Vibrant neon color-coding for different clinical resource types.
 
-Copy `.env.example` to `.env` and edit:
-
-```env
-APP_PORT=8000
-ALLOWED_ORIGINS=*
-LOG_LEVEL=info
-```
-
----
-
-## API Reference
-
-| Endpoint | Method | Description |
-|---|---|---|
-| `GET /` | GET | Web UI |
-| `POST /api/convert/text` | POST | Convert pasted HL7 text |
-| `POST /api/convert/file` | POST | Upload and convert file |
-| `GET /api/health` | GET | Health check |
-| `GET /api/docs` | GET | Swagger UI |
-| `GET /api/redoc` | GET | ReDoc documentation |
-
-### POST /api/convert/text
-
-**Request body (JSON):**
-```json
-{
-  "hl7_message": "MSH|^~\\&|SENDER|FAC|..."
-}
-```
-
-**Response:**
-```json
-{
-  "success": true,
-  "hl7_version": "2.5",
-  "message_type": "ADT",
-  "message_event": "A01",
-  "fhir_json": { "resourceType": "Bundle", ... },
-  "fhir_xml": "<?xml version=\"1.0\" ...>",
-  "human_readable": "=== HL7 → FHIR CONVERSION REPORT ...",
-  "resource_summary": [
-    { "resource_type": "Patient", "resource_id": "...", "description": "..." }
-  ],
-  "warnings": []
-}
-```
-
----
-
-## Project Structure
+## 📁 Project Structure
 
 ```
 hl7-fhir-converter/
 ├── app/
 │   ├── main.py                   # FastAPI application entry point
-│   ├── api/
-│   │   └── routes.py             # API endpoints
-│   ├── core/
-│   │   ├── parser.py             # HL7 parsing & version detection
-│   │   ├── validator.py          # Input validation
-│   │   ├── mapper.py             # Route to correct converter
-│   │   └── renderer.py           # JSON / XML / text output
-│   ├── converters/
-│   │   ├── base.py               # Shared utilities & FHIR helpers
-│   │   ├── adt.py                # ADT → Patient, Encounter, Practitioner
-│   │   ├── oru.py                # ORU → Observation, DiagnosticReport
-│   │   ├── orm.py                # ORM → ServiceRequest
-│   │   └── generic.py            # Fallback for unsupported types
-│   ├── file_handlers/
-│   │   ├── base.py               # Abstract handler interface
-│   │   ├── hl7_handler.py        # .hl7 / .txt
-│   │   ├── csv_handler.py        # .csv
-│   │   ├── excel_handler.py      # .xlsx / .xls
-│   │   ├── docx_handler.py       # .docx
-│   │   └── registry.py           # Handler registration & lookup
-│   ├── models/
-│   │   └── schemas.py            # Pydantic request/response models
-│   └── templates/
-│       └── index.html            # Web UI
+│   ├── converters/               # HL7 & EHR specialized mapping logic
+│   ├── file_handlers/            # Support for .hl7, .csv, .xlsx, .docx
+│   └── templates/                # Branded Jinja2 UI templates
 ├── static/
-│   ├── css/style.css
-│   └── js/app.js
-├── tests/
-│   ├── sample_messages/
-│   │   ├── adt_a01.hl7
-│   │   ├── oru_r01.hl7
-│   │   └── orm_o01.hl7
-│   └── test_converter.py
-├── Dockerfile
-├── docker-compose.yml
-├── .env.example
-└── requirements.txt
+│   ├── css/style.css             # Premium Dark Theme stylesheet
+│   ├── js/app.js                 # Frontend logic, export partitioning, and ZIP handling
+│   └── innova_logo_alpha.png     # Transparent branding asset
+├── Dockerfile                    # Multi-stage production build
+└── requirements.txt              # Backend dependencies
 ```
 
----
+## 📊 API Reference
 
-## Extending the System
-
-### Add a new message type converter
-
-1. Create `app/converters/mytype.py` extending `BaseConverter`
-2. Register it in `app/core/mapper.py`:
-   ```python
-   from app.converters.mytype import MyTypeConverter
-   CONVERTER_REGISTRY["MDM"] = MyTypeConverter
-   ```
-
-### Add a new file format
-
-1. Create `app/file_handlers/myformat_handler.py` extending `BaseFileHandler`
-2. Register it in `app/file_handlers/registry.py`:
-   ```python
-   from app.file_handlers.myformat_handler import MyFormatHandler
-   _HANDLERS.append(MyFormatHandler())
-   ```
-
----
-
-## Running Tests
-
-```bash
-pip install pytest
-pytest tests/ -v
-```
-
----
-
-## Supported HL7 Message Types
-
-| Type | Description | FHIR Resources |
+| Endpoint | Method | Description |
 |---|---|---|
-| ADT | Admit/Discharge/Transfer | Patient, Encounter, Practitioner, Organization |
-| ORU | Observation Result | Patient, DiagnosticReport, Observation |
-| ORM | Order Message | Patient, ServiceRequest, Practitioner |
-| *Any* | Unsupported types | Patient (if PID present), Parameters (raw data) |
+| `POST /api/convert/text` | POST | Convert HL7 text or EHR Raw Data |
+| `POST /api/convert/file` | POST | Upload and process files (.hl7, .txt, .csv, .xlsx) |
+| `GET /api/docs` | GET | Interactive Swagger UI |
+
+---
+
+## 🛠️ Technology Stack
+- **Backend**: FastAPI (Python), hl7apy, fhir.resources
+- **Frontend**: Vanilla JS, Glassmorphism CSS, Jinja2
+- **Libraries**: `xlsx-js-style` (Styled Excel), `JSZip` (Batch Export), `jspdf` (Reports)
+
+## 🐳 Deployment
+For advanced production deployment details, cluster configuration, and volume mounting, see [DEPLOYMENT_README.md](DEPLOYMENT_README.md).
