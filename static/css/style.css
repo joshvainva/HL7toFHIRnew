@@ -284,6 +284,80 @@ body {
   transform: translateY(-2px);
   box-shadow: 0 4px 12px rgba(102, 126, 234, 0.3);
 }
+.sample-bar { display: flex; align-items: center; flex-wrap: wrap; gap: 0.35rem; margin-bottom: 0.25rem; }
+.ehr-label { font-size: 0.72rem; font-weight: 700; padding: 0 0.2rem; white-space: nowrap; }
+.ehr-btn { font-size: 0.72rem; padding: 0.2rem 0.5rem; }
+
+/* EPIC — red */
+.epic-label { color: #b91c1c; }
+.epic-btn { background: rgba(220,38,38,0.07); border-color: rgba(220,38,38,0.3); color: #b91c1c; }
+.epic-btn:hover { background: linear-gradient(135deg,#b91c1c,#dc2626); color:#fff; border-color:#b91c1c; box-shadow:0 3px 10px rgba(185,28,28,0.3); transform:translateY(-1px); }
+
+/* Cerner — teal */
+.cerner-label { color: #0e7490; }
+.cerner-btn { background: rgba(14,116,144,0.07); border-color: rgba(14,116,144,0.3); color: #0e7490; }
+.cerner-btn:hover { background: linear-gradient(135deg,#0e7490,#0891b2); color:#fff; border-color:#0e7490; box-shadow:0 3px 10px rgba(14,116,144,0.3); transform:translateY(-1px); }
+
+/* Meditech — green */
+.meditech-label { color: #15803d; }
+.meditech-btn { background: rgba(21,128,61,0.07); border-color: rgba(21,128,61,0.3); color: #15803d; }
+.meditech-btn:hover { background: linear-gradient(135deg,#15803d,#16a34a); color:#fff; border-color:#15803d; box-shadow:0 3px 10px rgba(21,128,61,0.3); transform:translateY(-1px); }
+
+/* Allscripts — orange */
+.allscripts-label { color: #c2410c; }
+.allscripts-btn { background: rgba(194,65,12,0.07); border-color: rgba(194,65,12,0.3); color: #c2410c; }
+.allscripts-btn:hover { background: linear-gradient(135deg,#c2410c,#ea580c); color:#fff; border-color:#c2410c; box-shadow:0 3px 10px rgba(194,65,12,0.3); transform:translateY(-1px); }
+
+/* Athena — purple */
+.athena-label { color: #7c3aed; }
+.athena-btn { background: rgba(124,58,237,0.07); border-color: rgba(124,58,237,0.3); color: #7c3aed; }
+.athena-btn:hover { background: linear-gradient(135deg,#7c3aed,#8b5cf6); color:#fff; border-color:#7c3aed; box-shadow:0 3px 10px rgba(124,58,237,0.3); transform:translateY(-1px); }
+
+/* ── EHR Raw → FHIR Direction ── */
+.ehr-dir-btn {
+  background: linear-gradient(135deg, rgba(5,150,105,0.12), rgba(5,150,105,0.06));
+  border: 1px solid rgba(5,150,105,0.4);
+  color: #047857;
+  font-weight: 600;
+}
+.ehr-dir-btn.active {
+  background: linear-gradient(135deg, #047857, #059669);
+  color: #fff;
+  border-color: #047857;
+  box-shadow: 0 4px 14px rgba(5,150,105,0.35);
+}
+.ehr-input-banner {
+  background: linear-gradient(135deg, rgba(5,150,105,0.1), rgba(5,150,105,0.05));
+  border: 1px solid rgba(5,150,105,0.25);
+  border-radius: var(--radius-sm);
+  padding: 0.6rem 1rem;
+  font-size: 0.82rem;
+  color: #047857;
+  margin-bottom: 0.75rem;
+  line-height: 1.5;
+}
+.ehr-textarea {
+  font-family: var(--mono);
+  font-size: 0.8rem;
+  border-color: rgba(5,150,105,0.3);
+}
+.ehr-textarea:focus {
+  border-color: #059669;
+  box-shadow: 0 0 0 3px rgba(5,150,105,0.15);
+}
+.ehr-raw-btn {
+  background: rgba(5,150,105,0.08);
+  border-color: rgba(5,150,105,0.3);
+  color: #047857;
+}
+.ehr-raw-btn:hover {
+  background: linear-gradient(135deg, #047857, #059669);
+  color: #fff;
+  border-color: #047857;
+  box-shadow: 0 3px 10px rgba(5,150,105,0.3);
+  transform: translateY(-1px);
+}
+
 .clear-btn {
   margin-left: auto;
   background: rgba(255, 255, 255, 0.8);

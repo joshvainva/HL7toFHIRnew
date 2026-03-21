@@ -105,6 +105,64 @@ Rules:
 """
 
 # ─────────────────────────────────────────────────────────────────────
+# Raw EHR → FHIR prompts (2-step: resources then mappings)
+# ─────────────────────────────────────────────────────────────────────
+_EHR_TO_FHIR_SYSTEM = """You are an expert EHR data to FHIR R4 converter.
+The user will provide raw EHR data in any format: pipe-delimited records, key-value pairs, structured text, CSV, or clinical notes.
+
+For pipe-delimited format, the column order per record type is:
+PATIENT    | MRN | FirstName | LastName | DOB | Gender | Language | Phone | Address | City | State | Zip
+ENCOUNTER  | VisitID | VisitType | Location | ProviderID | ProviderName | StartTime | EndTime
+ALLERGY    | SeqNum | Substance | Reaction | OnsetDate
+DIAGNOSIS  | SeqNum | ICD Code | Description
+LAB_ORDER  | OrderID | PanelName | OrderedTime
+LAB_RESULT | SeqNum | LOINCCode | TestName | Value | Unit | ReferenceRange | Flag
+VITAL      | Type(BP/HR/WEIGHT/TEMP/SPO2) | Value | Unit
+IMMUNIZATION | VaccineName | Date | Dose | Unit | Route | Site
+INSURANCE  | ProviderName | Plan | Group | MemberID
+
+Your job is to parse ALL clinical information and return a FHIR R4 Bundle.
+
+Return a compact JSON array of FHIR R4 resources (no markdown, no extra text):
+[{"resourceType":"Patient","id":"..."},{"resourceType":"Encounter","id":"..."},...]
+
+Create resources from EVERY piece of data found:
+- Patient demographics (name, DOB, gender, MRN, address, phone, language, race/ethnicity)
+- Encounter (visit type, location, provider, start/end times, visit ID)
+- Practitioner (provider name, ID, NPI)
+- Organization (facility/clinic name)
+- AllergyIntolerance (substance, reaction, severity, onset date)
+- Condition (ICD codes, descriptions, clinical status)
+- Observation (lab results, vitals — each as separate Observation with LOINC code, value, unit, reference range, interpretation)
+- DiagnosticReport (if lab panel ordered — reference all related Observations)
+- ServiceRequest (lab orders with order ID, panel name, ordered time)
+- Immunization (vaccine name, CVX code, date, dose, route, site)
+- Coverage (insurance provider, plan, group, member ID, period)
+- RelatedPerson (next of kin, emergency contacts)
+
+Rules:
+- Use LOINC codes for lab tests and vitals where possible
+- Dates: YYYY-MM-DD format, DateTimes: YYYY-MM-DDTHH:MM:SS
+- Gender: male/female/other/unknown
+- Interpretation: N=normal, H=high, L=low, A=abnormal
+- Assign meaningful IDs derived from MRN/visit IDs in the data
+- Compact JSON, no indentation
+"""
+
+_EHR_TO_FHIR_MAPPINGS_SYSTEM = """You are an EHR to FHIR field mapping expert.
+Given raw EHR data and the FHIR resource IDs produced, return field mappings showing how each EHR field maps to FHIR.
+
+Return ONLY a compact JSON array — no markdown, no extra text:
+[{"resource_type":"Patient","resource_id":"id123","field_mappings":[{"fhir_field":"name[0].family","hl7_segment":"EHR","hl7_field":"Last Name","hl7_value":"Rivera","description":"Patient family name"}]}]
+
+- One entry per resource.
+- Cover every EHR field mapped to a FHIR path.
+- hl7_segment should be the EHR section name (PATIENT, ENCOUNTER, LAB RESULTS, etc.)
+- hl7_field is the field label from the raw data.
+- Compact JSON, no indentation.
+"""
+
+# ─────────────────────────────────────────────────────────────────────
 # FHIR → HL7 prompt
 # ─────────────────────────────────────────────────────────────────────
 _FHIR_TO_HL7_SYSTEM = """You are an expert FHIR R4 to HL7 v2.5 converter.
@@ -312,6 +370,17 @@ def _describe_resource(res: dict, rt: str) -> str:
         codings = vc.get("coding", [])
         display = codings[0].get("display", "") if codings else ""
         return display or "Immunization"
+    if rt == "Coverage":
+        payors = res.get("payor", [{}])
+        payor_name = payors[0].get("display", "") if payors else ""
+        plan_val  = next((c.get("value","") for c in res.get("class",[]) if c.get("type",{}).get("coding",[{}])[0].get("code") == "plan"), "")
+        group_val = next((c.get("value","") for c in res.get("class",[]) if c.get("type",{}).get("coding",[{}])[0].get("code") == "group"), "")
+        member_id = res.get("subscriberId", "")
+        parts = [payor_name]
+        if plan_val:  parts.append(f"Plan: {plan_val}")
+        if group_val: parts.append(f"Group: {group_val}")
+        if member_id: parts.append(f"MBR: {member_id}")
+        return " | ".join(p for p in parts if p) or "Coverage"
     return f"{rt} resource"
 
 
@@ -531,5 +600,84 @@ def convert_fhir_to_hl7_via_llm(fhir_bundle: dict) -> dict:
     data["ai_powered"] = True
     data.setdefault("direction", "fhir_to_hl7")
     data.setdefault("warnings", [])
+    data.setdefault("errors", [])
+    return data
+
+
+def convert_ehr_to_fhir_via_llm(ehr_data: str) -> dict:
+    """
+    Convert raw EHR data (any format) directly to FHIR R4 Bundle.
+    Step 1 — Extract all FHIR resources from raw EHR text.
+    Step 2 — Generate field mappings (EHR field → FHIR path).
+    """
+    client = _get_client()
+    warnings: list = []
+
+    # ── Step 1: All FHIR resources from EHR data ─────────────────────
+    try:
+        raw1 = _groq_call(
+            client, _EHR_TO_FHIR_SYSTEM,
+            "Convert this raw EHR data to FHIR R4 resources:\n\n" + ehr_data,
+            max_tokens=6000,
+        )
+        resources = _parse_resource_array(raw1)
+    except Exception as exc:
+        logger.error("EHR→FHIR step-1 failed: %s", exc)
+        return {"success": False, "errors": [str(exc)], "warnings": []}
+
+    if not resources:
+        return {"success": False, "errors": ["No FHIR resources could be extracted from the EHR data."], "warnings": warnings}
+
+    all_entries = [{"resource": r} for r in resources if isinstance(r, dict)]
+
+    # Detect message type from resource types present
+    rt_set = {e["resource"].get("resourceType", "") for e in all_entries}
+    if "DiagnosticReport" in rt_set or "Observation" in rt_set:
+        msg_type = "ORU"
+    elif "ServiceRequest" in rt_set:
+        msg_type = "ORM"
+    else:
+        msg_type = "ADT"
+
+    bundle = {"resourceType": "Bundle", "type": "collection", "entry": all_entries}
+    data: dict = {
+        "success": True,
+        "hl7_version": "N/A",
+        "message_type": msg_type,
+        "message_event": "EHR_RAW",
+        "fhir_json": bundle,
+        "field_mappings": [],
+        "direction": "ehr_to_fhir",
+    }
+
+    # ── Step 2: Field mappings ────────────────────────────────────────
+    id_summary = ", ".join(
+        f"{e['resource'].get('resourceType')}:{e['resource'].get('id','?')}"
+        for e in all_entries if "resource" in e
+    )[:600]
+    try:
+        raw2 = _groq_call(
+            client, _EHR_TO_FHIR_MAPPINGS_SYSTEM,
+            f"EHR Data:\n{ehr_data[:2500]}\n\nFHIR Resources: {id_summary}\n\nReturn field mappings.",
+            max_tokens=4096,
+        )
+        fm = _extract_json(raw2)
+        if isinstance(fm, list):
+            data["field_mappings"] = fm
+        elif isinstance(fm, dict):
+            data["field_mappings"] = fm.get("field_mappings", [])
+    except Exception as exc:
+        logger.warning("EHR→FHIR step-2 mappings failed (non-fatal): %s", exc)
+        warnings.append(f"Field mappings partial: {exc}")
+
+    # Normalise flat field_mappings
+    fm = data.get("field_mappings", [])
+    if fm and isinstance(fm[0], dict) and "fhir_field" in fm[0]:
+        data["field_mappings"] = [{"resource_type": "All", "resource_id": "ehr-ai", "field_mappings": fm}]
+
+    data["fhir_xml"] = _build_xml_from_bundle(bundle)
+    _normalize_resource_summary(data)
+    data["ai_powered"] = True
+    data["warnings"] = warnings
     data.setdefault("errors", [])
     return data

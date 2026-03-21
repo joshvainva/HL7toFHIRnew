@@ -95,12 +95,14 @@ def reverse_system_uri(uri: str) -> str:
         "http://loinc.org": "LN",
         "http://snomed.info/sct": "SCT",
         "http://hl7.org/fhir/sid/icd-10": "ICD10",
-        "http://hl7.org/fhir/sid/icd-9-cm": "ICD9",
+        "http://hl7.org/fhir/sid/icd-10-cm": "ICD10CM",
+        "http://hl7.org/fhir/sid/icd-9-cm": "ICD9CM",
         "http://www.ama-assn.org/go/cpt": "CPT4",
         "http://www.nlm.nih.gov/research/umls/rxnorm": "RXNORM",
         "http://hl7.org/fhir/sid/ndc": "NDC",
         "http://hl7.org/fhir/sid/us-npi": "NPI",
         "http://hl7.org/fhir/sid/cvx": "CVX",
+        "http://unitsofmeasure.org": "UCUM",
     }
     return mapping.get(uri, uri)
 

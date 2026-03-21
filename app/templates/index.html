@@ -27,6 +27,7 @@
       <div class="direction-toggle" id="direction-toggle">
         <button class="dir-btn active" id="btn-hl7-to-fhir" onclick="setDirection('hl7_to_fhir')">HL7 → FHIR</button>
         <button class="dir-btn" id="btn-fhir-to-hl7" onclick="setDirection('fhir_to_hl7')">FHIR → HL7</button>
+        <button class="dir-btn ehr-dir-btn" id="btn-ehr-to-fhir" onclick="setDirection('ehr_to_fhir')">⚕ EHR → FHIR</button>
       </div>
 
       <!-- AI Mode Toggle -->
@@ -75,10 +76,29 @@ PV1|1|I|ICU^101^A|E|||NPI123^SMITH^JANE|||SUR||||ADM|||V|||||||||||||||||||||||2
               spellcheck="false"
             ></textarea>
             <div class="sample-bar">
-              <span class="sample-label">Load sample:</span>
+              <span class="sample-label">Generic:</span>
               <button class="sample-btn" data-type="adt">ADT^A01</button>
               <button class="sample-btn" data-type="oru">ORU^R01</button>
               <button class="sample-btn" data-type="orm">ORM^O01</button>
+            </div>
+            <div class="sample-bar">
+              <span class="sample-label ehr-label epic-label">EPIC:</span>
+              <button class="sample-btn ehr-btn epic-btn" data-type="epic_adt">ADT</button>
+              <button class="sample-btn ehr-btn epic-btn" data-type="epic_oru">ORU</button>
+              <button class="sample-btn ehr-btn epic-btn" data-type="epic_orm">ORM</button>
+              <span class="sample-label ehr-label cerner-label">Cerner:</span>
+              <button class="sample-btn ehr-btn cerner-btn" data-type="cerner_adt">ADT</button>
+              <button class="sample-btn ehr-btn cerner-btn" data-type="cerner_oru">ORU</button>
+              <button class="sample-btn ehr-btn cerner-btn" data-type="cerner_orm">ORM</button>
+              <span class="sample-label ehr-label meditech-label">Meditech:</span>
+              <button class="sample-btn ehr-btn meditech-btn" data-type="meditech_adt">ADT</button>
+              <button class="sample-btn ehr-btn meditech-btn" data-type="meditech_oru">ORU</button>
+              <span class="sample-label ehr-label allscripts-label">Allscripts:</span>
+              <button class="sample-btn ehr-btn allscripts-btn" data-type="allscripts_adt">ADT</button>
+              <button class="sample-btn ehr-btn allscripts-btn" data-type="allscripts_oru">ORU</button>
+              <span class="sample-label ehr-label athena-label">Athena:</span>
+              <button class="sample-btn ehr-btn athena-btn" data-type="athena_adt">ADT</button>
+              <button class="sample-btn ehr-btn athena-btn" data-type="athena_oru">ORU</button>
               <button class="clear-btn" id="clear-btn">Clear</button>
             </div>
           </div>
@@ -113,6 +133,44 @@ Example:
               <button class="sample-btn fhir-sample-btn" data-fhir-type="oru">ORU Bundle</button>
               <button class="sample-btn fhir-sample-btn" data-fhir-type="orm">ORM Bundle</button>
               <button class="clear-btn" id="clear-fhir-btn">Clear</button>
+            </div>
+          </div>
+          <!-- EHR Raw input (shown when direction = ehr_to_fhir) -->
+          <div id="ehr-input-area" class="hidden">
+            <div class="ehr-input-banner">
+              ⚕ <strong>EHR Raw Data Mode</strong> — Paste structured EHR data (any format: key-value, CSV, clinical notes, export text). AI will convert directly to FHIR R4.
+            </div>
+            <textarea
+              id="ehr-input"
+              class="hl7-textarea ehr-textarea"
+              placeholder="Paste raw EHR data here — any format supported:
+
+PATIENT
+MRN: MRN-2026-001
+First Name: John
+Last Name: Doe
+DOB: 1980-03-15
+Gender: Male
+
+ENCOUNTER
+Visit Type: Outpatient
+Provider: Dr. Jane Smith
+
+LAB RESULTS
+Glucose: 95 mg/dL (Normal)
+Hemoglobin: 14.2 g/dL (Normal)
+
+DIAGNOSES
+1. J45.20 - Mild persistent asthma
+
+ALLERGIES
+Penicillin - Severe rash"
+              spellcheck="false"
+            ></textarea>
+            <div class="sample-bar">
+              <span class="sample-label">Load sample:</span>
+              <button class="sample-btn ehr-raw-btn" data-ehr-type="ehr_sample">EHR Sample</button>
+              <button class="clear-btn" id="clear-ehr-btn">Clear</button>
             </div>
           </div>
         </div>

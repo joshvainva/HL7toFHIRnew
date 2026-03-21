@@ -268,13 +268,13 @@ class ADTtoHL7Converter(BaseFHIRtoHL7Converter):
         pv1_44 = fmt_datetime(period.get("start", ""))
         pv1_45 = fmt_datetime(period.get("end", ""))
 
-        # Build to field 45; pad with empty fields in between
+        # PV1 fields up to 19 (visit number); dates appended only if present
         f = ["PV1", "1", pv1_2, pv1_3, "", "", "", pv1_7, pv1_8,
              "", "", "", "", "", "", "", "", "", "", pv1_19]
-        while len(f) < 44:
-            f.append("")
-        f.append(pv1_44)
-        if pv1_45:
-            f.append(pv1_45)
-
+        if pv1_44 or pv1_45:
+            while len(f) < 44:
+                f.append("")
+            f.append(pv1_44)
+            if pv1_45:
+                f.append(pv1_45)
         return "|".join(f).rstrip("|")

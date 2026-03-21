@@ -402,6 +402,91 @@ async def ai_convert_fhir_to_hl7(payload: dict):
     return result
 
 
+@router.post(
+    "/convert/ehr-to-fhir",
+    summary="Local EHR pipe-delimited → FHIR (no AI)",
+    description="Convert pipe-delimited EHR data to FHIR R4 Bundle using local code — no external API needed.",
+)
+async def convert_ehr_to_fhir(payload: dict):
+    from app.core.ehr_converter import convert_ehr_pipe_to_fhir
+    from app.core.renderer import to_fhir_xml
+    raw = payload.get("ehr_data", "").strip()
+    if not raw:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail="Field 'ehr_data' is required.",
+        )
+    try:
+        result = convert_ehr_pipe_to_fhir(raw)
+    except Exception as exc:
+        logger.exception("EHR→FHIR local conversion error")
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(exc))
+
+    if result.get("success"):
+        # Build XML via existing renderer
+        try:
+            result["fhir_xml"] = to_fhir_xml(result["fhir_json"])
+        except Exception:
+            result["fhir_xml"] = ""
+        history_item = HistoryItem(
+            id=str(uuid.uuid4()),
+            timestamp=datetime.now().isoformat(),
+            hl7_version="N/A",
+            message_type=result.get("message_type", "EHR"),
+            message_event="EHR_PIPE",
+            input_type="ehr_raw",
+            input_name="Raw EHR Data",
+            success=True,
+            hl7_content=raw,
+            fhir_json=result.get("fhir_json"),
+            fhir_xml=result.get("fhir_xml", ""),
+            warnings=result.get("warnings", []),
+        )
+        history.add_conversion(history_item)
+    return result
+
+
+@router.post(
+    "/convert/ai/ehr-to-fhir",
+    summary="AI-powered Raw EHR → FHIR conversion",
+    description="Accept raw EHR data in any format (key-value, CSV, clinical notes) and convert to FHIR R4 Bundle.",
+)
+async def ai_convert_ehr_to_fhir(payload: dict):
+    from app.core.llm_converter import convert_ehr_to_fhir_via_llm
+    raw = payload.get("ehr_data", "").strip()
+    if not raw:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail="Field 'ehr_data' is required.",
+        )
+    try:
+        result = convert_ehr_to_fhir_via_llm(raw)
+    except RuntimeError as exc:
+        raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail=str(exc))
+    except Exception as exc:
+        logger.exception("AI EHR→FHIR error")
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(exc))
+
+    if result.get("success"):
+        history_item = HistoryItem(
+            id=str(uuid.uuid4()),
+            timestamp=datetime.now().isoformat(),
+            hl7_version="N/A",
+            message_type=result.get("message_type", "EHR"),
+            message_event=None,
+            input_type="ehr_raw",
+            input_name="Raw EHR Data",
+            success=True,
+            hl7_content=raw,
+            fhir_json=result.get("fhir_json"),
+            fhir_xml=result.get("fhir_xml", ""),
+            warnings=result.get("warnings", []),
+        )
+        history.add_conversion(history_item)
+
+    return result
+
+
 @router.get(
     "/ai/status",
     summary="Check if AI (Groq) is configured",

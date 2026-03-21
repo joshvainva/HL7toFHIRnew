@@ -28,6 +28,205 @@ PID|1||MRN78965^^^CITYHOSP^MR||JOHNSON^MICHAEL^DAVID||19750820|M
 PV1|1|O|CLINIC^101^A
 ORC|NW|ORD20240315002||GRP20240315001|||||20240315151500|||NPI9876543^SMITH^RACHEL^M
 OBR|1|ORD20240315002||80053^COMPREHENSIVE METABOLIC PANEL^LN|||20240315151500|||||||||NPI9876543^SMITH^RACHEL|||R`,
+
+  // ── EHR Vendor Sample Messages ───────────────────────────────────────────
+  // ── EPIC ─────────────────────────────────────────────────────────────────
+
+  epic_adt: `MSH|^~\\&|EPIC|EPICFACILITY|INTERFACE|DEST|20260318080000||ADT^A01^ADT_A01|EPIC20260318001|P|2.5.1|||AL|NE|USA
+SFT|Epic Systems Corporation|10.1|EpicCare Ambulatory|1.0.0.1||20260101
+EVN|A01|20260318080000|||1234567890^SMITH^JAMES^E^^^MD^NPI
+PID|1||E123456789^^^EPIC^MR~987654321^^^SSA^SS||RODRIGUEZ^MARIA^ELENA^MRS^^L|GARCIA|19680415|F|||500 PINE STREET^APT 3B^CHICAGO^IL^60601^USA^H||^PRN^PH^^^312^5550198~^NET^Internet^mrodriguez@email.com||SPA^Spanish^ISO639|M^Married^HL70002|CAT^Catholic^HL70006|A98765432|||N^Not Hispanic or Latino^HL70189|||||||N
+PD1||||1234567890^SMITH^JAMES^E^^^MD^NPI
+NK1|1|RODRIGUEZ^CARLOS^A|SPO^Spouse^HL70063|500 PINE STREET^APT 3B^CHICAGO^IL^60601|^PRN^PH^^^312^5550199||EC^Emergency Contact^HL70131
+PV1|1|I|4N^420^B^EPICFAC|E^Emergency^HL70007||1234567890^SMITH^JAMES^E^^^MD^NPI|9876543210^JONES^SARAH^B^^^MD^NPI||INT^Internal Medicine^HL70069||||A^Admitted^HL70007|||1234567890^SMITH^JAMES^E^^^MD^NPI|INP^Inpatient^HL70007|VIS20260318001|||||||||||||||||||EPICFAC||||20260318075500
+PV2|||^Acute chest pain evaluation|||||20260318075500|20260325000000
+GT1|1|GUAR20260318001|RODRIGUEZ^MARIA^ELENA||500 PINE STREET^APT 3B^CHICAGO^IL^60601|^PRN^PH^^^312^5550198|||19680415|F|SEL^Self^HL70063
+IN1|1|BCBS-PPO^Blue Cross PPO^HL70072|BCBS-IL001|BLUE CROSS BLUE SHIELD|PO BOX 805107^^CHICAGO^IL^60680||^WPN^PH^^^312^9388000|GRP-EPIC-001|RODRIGUEZ MARIA|SUB20260318001|20260101|20261231||||||SEL^Self^HL70063|19680415
+AL1|1|DA^Drug Allergy^HL70127|SULFA^Sulfonamides^RXNORM|MO^Moderate^HL70128|Rash and itching|20150601
+AL1|2|EA^Environmental Allergy^HL70127|LATEX^Latex^L|MI^Mild^HL70128|Contact dermatitis
+DG1|1||I20.9^Unstable angina^ICD-10||20260318|A^Active^HL70052`,
+
+  epic_oru: `MSH|^~\\&|EPIC_LAB|EPICFACILITY|EHR_INTERFACE|DEST|20260318120000||ORU^R01^ORU_R01|EPICLAB20260318001|P|2.5.1|||AL|NE|USA
+SFT|Epic Systems Corporation|10.1|Beaker LIS|1.0.0.1||20260101
+PID|1||E123456789^^^EPIC^MR||RODRIGUEZ^MARIA^ELENA||19680415|F
+PV1|1|I|4N^420^B^EPICFAC||||1234567890^SMITH^JAMES^E^^^MD
+ORC|RE|EPICORD001|EPICFILL001|EPICGRP001|CM||||20260318100000|||1234567890^SMITH^JAMES^E^^^MD
+OBR|1|EPICORD001|EPICFILL001|10524-7^Cardiac enzymes panel^LN|||20260318093000|20260318110000||||||BLOOD|1234567890^SMITH^JAMES^E^^^MD||EPICFILL001|||F||1^^^20260318090000^^R
+NTE|1|L|Specimen collected from left antecubital vein. STAT order.
+OBX|1|NM|6598-7^Troponin I.cardiac^LN||0.04|ng/mL^Nanograms per milliliter^UCUM|<0.04|N|N||F|||20260318110000||1234567890^SMITH^JAMES^E^^^MD
+OBX|2|NM|2157-6^Creatine kinase^LN||145|U/L^Units per liter^UCUM|30-170|N|||F|||20260318110000
+OBX|3|NM|13969-1^CK-MB^LN||3.2|ng/mL^Nanograms per milliliter^UCUM|0.0-4.9|N|||F|||20260318110000
+OBX|4|NM|33762-6^NT-proBNP^LN||320|pg/mL^Picograms per milliliter^UCUM|<125|H|A||F|||20260318110000
+OBX|5|NM|2093-3^Cholesterol^LN||210|mg/dL^Milligrams per deciliter^UCUM|<200|H|||F|||20260318110000
+OBX|6|NM|2085-9^HDL Cholesterol^LN||38|mg/dL^Milligrams per deciliter^UCUM|>40|L|||F|||20260318110000
+OBX|7|NM|13457-7^LDL Cholesterol^LN||148|mg/dL^Milligrams per deciliter^UCUM|<100|H|A||F|||20260318110000
+OBX|8|NM|2571-8^Triglycerides^LN||185|mg/dL^Milligrams per deciliter^UCUM|<150|H|||F|||20260318110000
+OBR|2|EPICORD002|EPICFILL002|58410-2^CBC with Differential^LN|||20260318093000|20260318113000||||||BLOOD|1234567890^SMITH^JAMES^E^^^MD||EPICFILL002|||F
+NTE|1|L|Routine CBC with 5-part differential.
+OBX|1|NM|6690-2^WBC^LN||8.9|10*3/uL^Thousand per microliter^UCUM|4.5-11.0|N|||F|||20260318113000
+OBX|2|NM|718-7^Hemoglobin^LN||11.2|g/dL^Grams per deciliter^UCUM|12.0-16.0|L|A||F|||20260318113000
+OBX|3|NM|4544-3^Hematocrit^LN||33.8|%^Percent^UCUM|37.0-47.0|L|||F|||20260318113000
+OBX|4|NM|777-3^Platelets^LN||345|10*3/uL^Thousand per microliter^UCUM|150-400|N|||F|||20260318113000
+OBX|5|NM|770-8^Neutrophils^LN||72.1|%^Percent^UCUM|50-70|H|||F|||20260318113000
+RXA|0|1|20260318|20260318|108^Aspirin^CVX|325|mg^milligram^UCUM||01^Historical^NIP001|1234567890^SMITH^JAMES^E^^^MD|^^^EPICFAC||||LOT-ASA-001|20271231
+RXR|PO^Oral^HL70162|MOUTH^Oral^HL70163`,
+
+  epic_orm: `MSH|^~\\&|EPIC_OE|EPICFACILITY|LAB_INTERFACE|DEST|20260318090000||ORM^O01^ORM_O01|EPICORM20260318001|P|2.5.1|||AL|NE|USA
+SFT|Epic Systems Corporation|10.1|EpicCare Inpatient|1.0.0.1||20260101
+PID|1||E123456789^^^EPIC^MR~987654321^^^SSA^SS||RODRIGUEZ^MARIA^ELENA||19680415|F|||500 PINE STREET^APT 3B^CHICAGO^IL^60601
+PD1||||1234567890^SMITH^JAMES^E^^^MD^NPI
+PV1|1|I|4N^420^B^EPICFAC|E|||1234567890^SMITH^JAMES^E^^^MD^NPI|||INT||||A|||1234567890^SMITH^JAMES^E^^^MD^NPI|INP|VIS20260318001
+ORC|NW|EPICORD003|EPICFILL003|EPICGRP003|SC||||20260318090000|||1234567890^SMITH^JAMES^E^^^MD^NPI|||EPICFAC
+OBR|1|EPICORD003|EPICFILL003|723-4^Renal panel^LN^RENAL^Renal Function Panel^EPIC|||20260318090000||||||BLOOD^Venous Blood^HL70070|1234567890^SMITH^JAMES^E^^^MD||EPICFILL003|20260318090000|||R||1^^^20260318090000^^ROUTINE
+NTE|1|L|STAT order - patient being evaluated for acute kidney injury. Please expedite.
+ORC|NW|EPICORD004|EPICFILL004|EPICGRP003|SC||||20260318090000|||1234567890^SMITH^JAMES^E^^^MD^NPI|||EPICFAC
+OBR|2|EPICORD004|EPICFILL004|24357-6^Urinalysis^LN|||20260318090000||||||URINE^Clean Catch Urine^HL70070|1234567890^SMITH^JAMES^E^^^MD||EPICFILL004|20260318090000|||R
+NTE|1|L|Clean catch midstream specimen required.
+ORC|NW|EPICORD005|EPICFILL005|EPICGRP003|SC||||20260318090500|||1234567890^SMITH^JAMES^E^^^MD^NPI|||EPICFAC
+OBR|3|EPICORD005|EPICFILL005|11529-5^Surgical pathology report^LN|||20260318090500||||||TISSUE^Tissue Sample^L|1234567890^SMITH^JAMES^E^^^MD||EPICFILL005|||R
+NTE|1|L|Biopsy sample from cardiac catheterization procedure.`,
+
+  // ── CERNER ───────────────────────────────────────────────────────────────
+  cerner_adt: `MSH|^~\\&|CERNER|CERNERHOSP|EXTERNAL|DEST|20260318083000||ADT^A01^ADT_A01|CERNER20260318001|P|2.5|||AL|NE|USA
+EVN|A01|20260318083000|||RN22345^WALKER^LINDA^K^RN
+PID|1||C987654321^^^CERNER^MR~876543210^^^SSN^SS||PATEL^ARUN^KUMAR^^MR^^L|SHARMA|19550912|M|||2200 BROADWAY AVE^UNIT 12^NEW YORK^NY^10025^USA^H||^PRN^PH^^^212^5550342~^NET^Internet^apatel@email.com||HIN^Hindi^ISO639|M^Married^HL70002||C-VISIT-2026-001|||2186-5^Not Hispanic^HL70189
+PD1|||CERNER HEALTH^^C100^NPI|RNP55678^NGUYEN^LISA^T^^^MD^NPI
+NK1|1|PATEL^PRIYA^S|SPO^Spouse^HL70063|2200 BROADWAY AVE^UNIT 12^NEW YORK^NY^10025|^PRN^PH^^^212^5550343
+PV1|1|I|6W^612^A^CERNERHOSP|U^Urgent^HL70007||RNP55678^NGUYEN^LISA^T^^^MD|CRN66789^CHEN^ROBERT^W^^^MD||HEM^Hematology^HL70069||||A|||RNP55678^NGUYEN^LISA^T^^^MD|INP^Inpatient^HL70007|CVIS20260318001|||||||||||||||||||CERNERHOSP||||ADM|20260318082500
+PV2|||^Hematology workup - suspected anemia||||20260318082500|20260325000000
+GT1|1|CGUAR20260318|PATEL^ARUN^KUMAR||2200 BROADWAY AVE^UNIT 12^NEW YORK^NY^10025|^PRN^PH^^^212^5550342|||19550912|M|SEL^Self^HL70063
+IN1|1|AETNA-HMO^Aetna HMO^HL70072|AETNA-NY001|AETNA HEALTH INC|PO BOX 981106^^EL PASO^TX^79998||^WPN^PH^^^800^8723862|AETNA-GRP-2026|PATEL ARUN|AETNA-SUB-001|20260101|20261231
+AL1|1|MA^Medication Allergy^HL70127|NSAIDS^NSAIDs^RXNORM|SE^Severe^HL70128|GI Bleeding|20180301
+DG1|1||D50.9^Iron deficiency anemia unspecified^ICD-10||20260318|A^Active^HL70052
+DG1|2||K92.1^Melena^ICD-10||20260318|A^Active^HL70052`,
+
+  cerner_oru: `MSH|^~\\&|CERNER_LAB|CERNERHOSP|EHR_DEST|EXTERNAL|20260318140000||ORU^R01^ORU_R01|CERNLAB20260318001|P|2.5|||AL|NE|USA
+PID|1||C987654321^^^CERNER^MR||PATEL^ARUN^KUMAR||19550912|M
+PV1|1|I|6W^612^A^CERNERHOSP||||RNP55678^NGUYEN^LISA^T^^^MD
+ORC|RE|CRNORD001|CRNFILL001|CRNGRP001|CM||||20260318120000|||RNP55678^NGUYEN^LISA^T^^^MD
+OBR|1|CRNORD001|CRNFILL001|58410-2^CBC with Differential^LN|||20260318120000|20260318132000||||||BLOOD|RNP55678^NGUYEN^LISA^T^^^MD||CRNFILL001|||F
+NTE|1|L|STAT CBC ordered for suspected iron deficiency anemia workup.
+OBX|1|NM|718-7^Hemoglobin^LN||7.8|g/dL^Grams per deciliter^UCUM|13.5-17.5|LL|C||F|||20260318132000||RNP55678^NGUYEN^LISA^T^^^MD
+OBX|2|NM|4544-3^Hematocrit^LN||24.2|%^Percent^UCUM|41.0-53.0|LL|||F|||20260318132000
+OBX|3|NM|787-2^MCV^LN||68.4|fL^Femtoliters^UCUM|80.0-100.0|L|||F|||20260318132000
+OBX|4|NM|785-6^MCH^LN||21.3|pg^Picograms^UCUM|27.0-33.0|L|||F|||20260318132000
+OBX|5|NM|777-3^Platelets^LN||420|10*3/uL^Thousand per microliter^UCUM|150-400|H|||F|||20260318132000
+OBX|6|NM|6690-2^WBC^LN||9.8|10*3/uL^Thousand per microliter^UCUM|4.5-11.0|N|||F|||20260318132000
+OBR|2|CRNORD002|CRNFILL002|24362-6^Iron panel^LN|||20260318120000|20260318135000||||||BLOOD|RNP55678^NGUYEN^LISA^T^^^MD||CRNFILL002|||F
+OBX|1|NM|2498-4^Iron^LN||28|ug/dL^Micrograms per deciliter^UCUM|60-170|LL|C||F|||20260318135000
+OBX|2|NM|2714-4^TIBC^LN||520|ug/dL^Micrograms per deciliter^UCUM|250-370|H|||F|||20260318135000
+OBX|3|NM|2284-8^Ferritin^LN||4|ng/mL^Nanograms per milliliter^UCUM|12-300|L|A||F|||20260318135000
+OBX|4|NM|4679-7^Reticulocytes^LN||1.2|%^Percent^UCUM|0.5-1.5|N|||F|||20260318135000`,
+
+  cerner_orm: `MSH|^~\\&|CERNER_OE|CERNERHOSP|RADIOLOGY|DEST|20260318090000||ORM^O01^ORM_O01|CRNORM20260318001|P|2.5|||AL|NE|USA
+PID|1||C987654321^^^CERNER^MR||PATEL^ARUN^KUMAR||19550912|M|||2200 BROADWAY AVE^UNIT 12^NEW YORK^NY^10025
+PV1|1|I|6W^612^A^CERNERHOSP|U|||RNP55678^NGUYEN^LISA^T^^^MD
+ORC|NW|CRNORD003|CRNFILL003|CRNGRP002|SC||||20260318090000|||RNP55678^NGUYEN^LISA^T^^^MD
+OBR|1|CRNORD003|CRNFILL003|36643-5^Abdominal CT^LN|||20260318090000||||||N/A|RNP55678^NGUYEN^LISA^T^^^MD||CRNFILL003|||R
+NTE|1|L|Rule out GI bleed source. Patient has melena x 3 days. Prior colonoscopy 2 years ago was normal.
+ORC|NW|CRNORD004|CRNFILL004|CRNGRP002|SC||||20260318090000|||RNP55678^NGUYEN^LISA^T^^^MD
+OBR|2|CRNORD004|CRNFILL004|13292-1^Upper GI endoscopy^LN|||20260318090500||||||N/A|RNP55678^NGUYEN^LISA^T^^^MD||CRNFILL004|||R
+NTE|1|L|GI consult ordered. Suspected peptic ulcer disease as source of blood loss.`,
+
+  // ── MEDITECH ─────────────────────────────────────────────────────────────
+  meditech_adt: `MSH|^~\\&|MEDITECH|MTFACILITY|INTERFACE|EXTERNAL|20260318091500||ADT^A01^ADT_A01|MT20260318001|P|2.4|||AL|NE
+EVN|A01|20260318091500|||MT-RN-001^HARRIS^CAROL^J^RN
+PID|1||MT4567890^^^MEDITECH^MR||WILLIAMS^DOROTHY^MAE^^MRS^^L|THOMPSON|19430718|F|||87 ELM STREET^^BOSTON^MA^02101^USA^H||^PRN^PH^^^617^5550876|ENG^English^ISO639|W^Widowed^HL70002||MT-ACCT-2026-001
+PD1|||MTPROVIDER^^MT200^NPI|MT-MD-001^BROWN^RICHARD^A^^^MD^NPI
+NK1|1|WILLIAMS^JAMES^A|SON^Son^HL70063|12 OAK LANE^^CAMBRIDGE^MA^02138|^PRN^PH^^^617^5550877
+PV1|1|I|3E^350^A^MTFACILITY|E^Emergency^HL70007||MT-MD-001^BROWN^RICHARD^A^^^MD|MT-MD-002^TAYLOR^SUSAN^M^^^MD||CARD^Cardiology^HL70069||||A|||MT-MD-001^BROWN^RICHARD^A^^^MD|INP^Inpatient^HL70007|MTVIS20260318001|||||||||||||||||||MTFACILITY||||ADM|20260318091000
+PV2|||^Cardiac monitoring - atrial fibrillation with rapid ventricular response
+GT1|1|MTGUAR001|WILLIAMS^DOROTHY^MAE||87 ELM STREET^^BOSTON^MA^02101|^PRN^PH^^^617^5550876|||19430718|F|SEL
+IN1|1|MEDICARE-A^Medicare Part A^HL70072|MEDICARE|CENTERS FOR MEDICARE AND MEDICAID|7500 SECURITY BLVD^^BALTIMORE^MD^21244||^WPN^PH^^^800^6334227|MEDICARE-PART-A|WILLIAMS DOROTHY|1EG4-TE5-MK72|20260101|20261231
+AL1|1|DA^Drug Allergy^HL70127|WARFARIN^Warfarin^RXNORM|SV^Severe^HL70128|Hemorrhage
+DG1|1||I48.0^Paroxysmal atrial fibrillation^ICD-10||20260318|A^Active^HL70052
+DG1|2||I50.9^Heart failure unspecified^ICD-10||20260318|A^Active^HL70052
+DG1|3||E11.9^Type 2 Diabetes Mellitus^ICD-10||20260318|A^Active^HL70052`,
+
+  meditech_oru: `MSH|^~\\&|MEDITECH_LAB|MTFACILITY|EHR_DEST|EXTERNAL|20260318150000||ORU^R01^ORU_R01|MTLAB20260318001|P|2.4
+PID|1||MT4567890^^^MEDITECH^MR||WILLIAMS^DOROTHY^MAE||19430718|F
+PV1|1|I|3E^350^A^MTFACILITY||||MT-MD-001^BROWN^RICHARD^A^^^MD
+ORC|RE|MTORD001|MTFILL001||CM||||20260318130000|||MT-MD-001^BROWN^RICHARD^A^^^MD
+OBR|1|MTORD001|MTFILL001|55905-3^Cardiac monitoring panel^LN|||20260318130000|20260318143000||||||BLOOD|MT-MD-001^BROWN^RICHARD^A^^^MD||MTFILL001|||F
+NTE|1|L|Patient in atrial fibrillation on admission. Rate control initiated.
+OBX|1|NM|8867-4^Heart rate^LN||134|/min^Per minute^UCUM|60-100|H|C||F|||20260318143000||MT-MD-001^BROWN^RICHARD^A^^^MD
+OBX|2|NM|8480-6^Systolic BP^LN||158|mm[Hg]^Millimeters mercury^UCUM|90-120|H|||F|||20260318143000
+OBX|3|NM|8462-4^Diastolic BP^LN||94|mm[Hg]^Millimeters mercury^UCUM|60-80|H|||F|||20260318143000
+OBX|4|NM|2160-0^Creatinine^LN||1.42|mg/dL^Milligrams per deciliter^UCUM|0.6-1.2|H|||F|||20260318143000
+OBX|5|NM|3094-0^BUN^LN||28|mg/dL^Milligrams per deciliter^UCUM|7-25|H|||F|||20260318143000
+OBX|6|NM|17861-6^Calcium^LN||9.1|mg/dL^Milligrams per deciliter^UCUM|8.5-10.5|N|||F|||20260318143000
+OBX|7|NM|2823-3^Potassium^LN||3.3|mEq/L^Milliequivalents per liter^UCUM|3.5-5.0|L|A||F|||20260318143000
+OBX|8|NM|2951-2^Sodium^LN||138|mEq/L^Milliequivalents per liter^UCUM|136-145|N|||F|||20260318143000
+OBX|9|CWE|8601-7^EKG impression^LN||AFIB^Atrial Fibrillation with RVR^LOCAL||||F|||20260318145000`,
+
+  // ── ALLSCRIPTS ───────────────────────────────────────────────────────────
+  allscripts_adt: `MSH|^~\\&|ALLSCRIPTS|ALLFACILITY|INTERFACE|EXTERNAL|20260318094500||ADT^A04^ADT_A04|ALL20260318001|P|2.5|||AL|NE|USA
+EVN|A04|20260318094500|||ALL-NP-001^GARCIA^PATRICIA^M^NP
+PID|1||ALL78901^^^ALLSCRIPTS^MR||CHEN^JENNIFER^LI^^MS^^L||19920303|F|||456 MAPLE DRIVE^SUITE 2^SEATTLE^WA^98101^USA^H||^PRN^PH^^^206^5550654~^NET^Internet^jchen@email.com||ENG^English^ISO639|S^Single^HL70002|BUD^Buddhist^HL70006|ALL-ACCT-2026-001|||2186-5^Not Hispanic^HL70189
+PD1|||ALLPROVIDER^^ALL100^NPI|ALL-MD-001^MARTINEZ^CARLOS^R^^^MD^NPI
+NK1|1|CHEN^DAVID^Q|BRO^Brother^HL70063|789 FERN AVE^^BELLEVUE^WA^98004|^PRN^PH^^^425^5550655
+PV1|1|O|AMB^1001^A^ALLFACILITY||ALL-MD-001^MARTINEZ^CARLOS^R^^^MD|||||AMB^Ambulatory^HL70007||||N|||ALL-MD-001^MARTINEZ^CARLOS^R^^^MD|OUT^Outpatient^HL70007|ALLVIS20260318001|||||||||||||||||||ALLFACILITY||||20260318094000
+PV2|||^Annual wellness visit and preventive care
+IN1|1|PREMERA-PPO^Premera Blue Cross PPO^HL70072|PREMERA-WA|PREMERA BLUE CROSS|PO BOX 91059^^SEATTLE^WA^98111||^WPN^PH^^^800^7224670|PREMERA-GRP-2026|CHEN JENNIFER|PREMERA-MBR-001|20260101|20261231
+AL1|1|FA^Food Allergy^HL70127|GLUTEN^Gluten^L|MO^Moderate^HL70128|Celiac disease symptoms
+DG1|1||K90.0^Celiac disease^ICD-10||20260318|A^Active^HL70052
+DG1|2||F32.1^Major depressive disorder moderate^ICD-10||20260318|A^Active^HL70052
+PR1|1||99395^Preventive visit 18-39^CPT||20260318094000|SELF`,
+
+  allscripts_oru: `MSH|^~\\&|ALLSCRIPTS_LAB|ALLFACILITY|EHR_DEST|EXTERNAL|20260318110000||ORU^R01^ORU_R01|ALLLAB20260318001|P|2.5
+PID|1||ALL78901^^^ALLSCRIPTS^MR||CHEN^JENNIFER^LI||19920303|F
+PV1|1|O|AMB^1001^A^ALLFACILITY||||ALL-MD-001^MARTINEZ^CARLOS^R^^^MD
+ORC|RE|ALLORD001|ALLFILL001|ALLGRP001|CM||||20260318095000|||ALL-MD-001^MARTINEZ^CARLOS^R^^^MD
+OBR|1|ALLORD001|ALLFILL001|57698-3^Lipid panel^LN|||20260318095000|20260318104500||||||BLOOD FASTING|ALL-MD-001^MARTINEZ^CARLOS^R^^^MD||ALLFILL001|||F
+NTE|1|L|Fasting lipid panel as part of annual wellness visit. Patient confirmed 12-hour fast.
+OBX|1|NM|2093-3^Cholesterol^LN||178|mg/dL^Milligrams per deciliter^UCUM|<200|N|||F|||20260318104500
+OBX|2|NM|2085-9^HDL Cholesterol^LN||62|mg/dL^Milligrams per deciliter^UCUM|>50|N|||F|||20260318104500
+OBX|3|NM|13457-7^LDL Cholesterol^LN||98|mg/dL^Milligrams per deciliter^UCUM|<100|N|||F|||20260318104500
+OBX|4|NM|2571-8^Triglycerides^LN||92|mg/dL^Milligrams per deciliter^UCUM|<150|N|||F|||20260318104500
+OBR|2|ALLORD002|ALLFILL002|24331-1^Metabolic panel^LN|||20260318095000|20260318105500||||||BLOOD|ALL-MD-001^MARTINEZ^CARLOS^R^^^MD||ALLFILL002|||F
+OBX|1|NM|2345-7^Glucose^LN||89|mg/dL^Milligrams per deciliter^UCUM|70-99|N|||F|||20260318105500
+OBX|2|NM|1742-6^ALT^LN||22|U/L^Units per liter^UCUM|7-56|N|||F|||20260318105500
+OBX|3|NM|1920-8^AST^LN||19|U/L^Units per liter^UCUM|10-40|N|||F|||20260318105500
+OBX|4|NM|1975-2^Total Bilirubin^LN||0.7|mg/dL^Milligrams per deciliter^UCUM|0.1-1.2|N|||F|||20260318105500
+OBX|5|NM|2157-6^Creatinine^LN||0.82|mg/dL^Milligrams per deciliter^UCUM|0.5-1.1|N|||F|||20260318105500
+OBX|6|NM|38483-4^Creatinine Urine^LN||1.1|mg/dL|||N|||F|||20260318105500`,
+
+  // ── ATHENA HEALTH ────────────────────────────────────────────────────────
+  athena_adt: `MSH|^~\\&|ATHENA|ATHENAFAC|INTERFACE|EXTERNAL|20260318100000||ADT^A01^ADT_A01|ATH20260318001|P|2.5|||AL|NE|USA
+EVN|A01|20260318100000|||ATH-MA-001^JOHNSON^KAREN^L^MA
+PID|1||ATH112233^^^ATHENA^MR||THOMPSON^ROBERT^EARL^^MR^^L|JACKSON|19670824|M|||3300 SUNSET BLVD^^LOS ANGELES^CA^90028^USA^H||^PRN^PH^^^323^5550789~^NET^Internet^rthompson@email.com||ENG^English^ISO639|M^Married^HL70002||ATH-ACCT-2026-001|||2135-2^Hispanic or Latino^HL70189
+PD1|||ATHPRACTICE^^ATH300^NPI|ATH-MD-001^PATEL^PRIYA^K^^^MD^NPI
+NK1|1|THOMPSON^LINDA^M|SPS^Spouse^HL70063|3300 SUNSET BLVD^^LOS ANGELES^CA^90028|^PRN^PH^^^323^5550790
+PV1|1|I|5S^510^A^ATHENAFAC|E^Emergency^HL70007||ATH-MD-001^PATEL^PRIYA^K^^^MD|ATH-MD-002^KIM^JAMES^S^^^MD||ORTHO^Orthopedics^HL70069||||A|||ATH-MD-001^PATEL^PRIYA^K^^^MD|INP^Inpatient^HL70007|ATHVIS20260318001|||||||||||||||||||ATHENAFAC||||ADM|20260318095500
+PV2|||^Right hip fracture - surgical repair planned
+GT1|1|ATHGUAR001|THOMPSON^ROBERT^EARL||3300 SUNSET BLVD^^LOS ANGELES^CA^90028|^PRN^PH^^^323^5550789|||19670824|M|SEL
+IN1|1|BLUESHIELD-CA-PPO^Blue Shield CA PPO^HL70072|BSCA-001|BLUE SHIELD OF CALIFORNIA|PO BOX 272570^^CHICO^CA^95927||^WPN^PH^^^800^7943034|BSCA-GRP-2026|THOMPSON ROBERT|BSCA-MBR-001|20260101|20261231
+IN2|||ATH-EMP-001|THOMPSON INDUSTRIES LLC
+AL1|1|DA^Drug Allergy^HL70127|CODEINE^Codeine^RXNORM|MO^Moderate^HL70128|Nausea and vomiting|20100301
+AL1|2|DA^Drug Allergy^HL70127|ASPIRIN^Aspirin^RXNORM|MI^Mild^HL70128|GI upset
+DG1|1||S72.001A^Fracture right femoral neck initial encounter^ICD-10||20260318|A^Active^HL70052
+DG1|2||M81.0^Age-related osteoporosis without fracture^ICD-10||20260318|A^Active^HL70052
+PR1|1||27130^Total hip arthroplasty^CPT||20260318110000|PLANNED`,
+
+  athena_oru: `MSH|^~\\&|ATHENA_LAB|ATHENAFAC|EHR_DEST|EXTERNAL|20260318130000||ORU^R01^ORU_R01|ATHLAB20260318001|P|2.5
+PID|1||ATH112233^^^ATHENA^MR||THOMPSON^ROBERT^EARL||19670824|M
+PV1|1|I|5S^510^A^ATHENAFAC||||ATH-MD-001^PATEL^PRIYA^K^^^MD
+ORC|RE|ATHORD001|ATHFILL001|ATHGRP001|CM||||20260318110000|||ATH-MD-001^PATEL^PRIYA^K^^^MD
+OBR|1|ATHORD001|ATHFILL001|57021-8^CBC W Auto Differential^LN|||20260318110000|20260318121000||||||BLOOD|ATH-MD-001^PATEL^PRIYA^K^^^MD||ATHFILL001|||F
+NTE|1|L|Pre-operative CBC for right total hip arthroplasty.
+OBX|1|NM|718-7^Hemoglobin^LN||11.8|g/dL^Grams per deciliter^UCUM|13.5-17.5|L|A||F|||20260318121000||ATH-MD-001^PATEL^PRIYA^K^^^MD
+OBX|2|NM|4544-3^Hematocrit^LN||36.2|%^Percent^UCUM|41.0-53.0|L|||F|||20260318121000
+OBX|3|NM|6690-2^WBC^LN||10.2|10*3/uL^Thousand per microliter^UCUM|4.5-11.0|N|||F|||20260318121000
+OBX|4|NM|777-3^Platelets^LN||287|10*3/uL^Thousand per microliter^UCUM|150-400|N|||F|||20260318121000
+OBR|2|ATHORD002|ATHFILL002|24331-1^Basic metabolic panel^LN|||20260318110000|20260318123000||||||BLOOD|ATH-MD-001^PATEL^PRIYA^K^^^MD||ATHFILL002|||F
+NTE|1|L|Pre-op BMP to assess renal function and electrolytes.
+OBX|1|NM|2345-7^Glucose^LN||102|mg/dL^Milligrams per deciliter^UCUM|70-99|H|||F|||20260318123000
+OBX|2|NM|2160-0^Creatinine^LN||1.1|mg/dL^Milligrams per deciliter^UCUM|0.7-1.3|N|||F|||20260318123000
+OBX|3|NM|3094-0^BUN^LN||18|mg/dL^Milligrams per deciliter^UCUM|7-25|N|||F|||20260318123000
+OBX|4|NM|2823-3^Potassium^LN||4.1|mEq/L^Milliequivalents per liter^UCUM|3.5-5.0|N|||F|||20260318123000
+OBX|5|NM|2951-2^Sodium^LN||141|mEq/L^Milliequivalents per liter^UCUM|136-145|N|||F|||20260318123000
+OBX|6|NM|17861-6^Calcium^LN||9.4|mg/dL^Milligrams per deciliter^UCUM|8.5-10.5|N|||F|||20260318123000
+OBX|7|NM|2028-9^CO2^LN||24|mEq/L^Milliequivalents per liter^UCUM|22-29|N|||F|||20260318123000`,
 };
 
 // ---------------------------------------------------------------------------
@@ -162,33 +361,39 @@ window.toggleAIMode = function() {
 // ---------------------------------------------------------------------------
 window.setDirection = function(dir) {
   conversionDirection = dir;
-  const isHL7 = dir === 'hl7_to_fhir';
+  const isHL7  = dir === 'hl7_to_fhir';
+  const isFHIR = dir === 'fhir_to_hl7';
+  const isEHR  = dir === 'ehr_to_fhir';
 
   // Toggle direction buttons
   document.getElementById('btn-hl7-to-fhir').classList.toggle('active', isHL7);
-  document.getElementById('btn-fhir-to-hl7').classList.toggle('active', !isHL7);
+  document.getElementById('btn-fhir-to-hl7').classList.toggle('active', isFHIR);
+  document.getElementById('btn-ehr-to-fhir').classList.toggle('active', isEHR);
 
   // Toggle input areas inside the text tab
   document.getElementById('hl7-input-area').classList.toggle('hidden', !isHL7);
-  document.getElementById('fhir-input-area').classList.toggle('hidden', isHL7);
+  document.getElementById('fhir-input-area').classList.toggle('hidden', !isFHIR);
+  document.getElementById('ehr-input-area').classList.toggle('hidden', !isEHR);
 
   // Update text tab label
-  document.getElementById('in-tab-text').textContent = isHL7 ? 'Paste HL7' : 'Paste FHIR';
+  document.getElementById('in-tab-text').textContent = isHL7 ? 'Paste HL7' : isFHIR ? 'Paste FHIR' : 'Paste EHR Data';
 
-  // Hide Mapping Rules tab in FHIR→HL7 direction (Upload File stays visible for both)
+  // Hide Mapping Rules tab in FHIR→HL7 direction
   const tabMapping = document.getElementById('in-tab-mapping');
   if (tabMapping) tabMapping.classList.toggle('hidden', !isHL7);
 
-  // Update drop zone hint text to match expected file type
+  // Update drop zone hint text
   const dropHint = document.querySelector('.drop-hint');
   const fileAcceptInput = document.getElementById('file-input');
-  if (isHL7) {
+  if (isHL7 || isEHR) {
     if (dropHint) dropHint.textContent = 'Supported: .hl7 · .txt · .csv · .xlsx · .xls · .docx';
     if (fileAcceptInput) fileAcceptInput.accept = '.hl7,.txt,.csv,.xlsx,.xls,.docx';
   } else {
     if (dropHint) dropHint.textContent = 'Supported: .json (FHIR Bundle)';
     if (fileAcceptInput) fileAcceptInput.accept = '.json';
   }
+
+  // EHR mode works with or without AI
 
   // If currently on a now-hidden tab, switch back to text tab
   const activeInTab = document.querySelector('.input-tabs .tab-btn.active');
@@ -197,7 +402,8 @@ window.setDirection = function(dir) {
   }
 
   // Update convert button label
-  document.getElementById('convert-btn-label').textContent = isHL7 ? 'Convert to FHIR' : 'Convert to HL7';
+  document.getElementById('convert-btn-label').textContent =
+    isHL7 ? 'Convert to FHIR' : isFHIR ? 'Convert to HL7' : 'Convert EHR to FHIR';
 
   // HL7→FHIR output tabs: FHIR JSON, XML, Human Readable, Summary, Field Mappings (no HL7 Message)
   // FHIR→HL7 output tabs: HL7 Message only
@@ -272,13 +478,45 @@ document.querySelectorAll('.output-tabs .tab-btn').forEach(btn => {
 // ---------------------------------------------------------------------------
 // Sample buttons
 // ---------------------------------------------------------------------------
+const EHR_SAMPLE = `PATIENT|MRN-2026-009901|James|Rivera|1978-03-22|Male|Spanish|214-555-0187|5821 Oak Creek Drive|Dallas|TX|75201
+
+ENCOUNTER|VIS-2026-1001|Outpatient|Clinic Room 101|98765|Dr. Linda Park|2026-02-10T14:30:00|2026-02-10T14:45:00
+
+ALLERGY|1|Sulfonamides|Moderate rash|2015-03-01
+
+DIAGNOSIS|1|J45.20|Mild persistent asthma
+DIAGNOSIS|2|I10|Essential hypertension
+
+LAB_ORDER|ORD-2026-881|General Health Panel|2026-02-10T14:35:00
+
+LAB_RESULT|1|2345-7|Glucose|95|mg/dL|65-99|Normal
+LAB_RESULT|2|2160-0|Creatinine|1.0|mg/dL|0.6-1.3|Normal
+LAB_RESULT|3|718-7|Hemoglobin|15.1|g/dL|13.5-17.5|Normal
+
+VITAL|BP|132/84|mmHg
+VITAL|HR|78|bpm
+VITAL|WEIGHT|82.4|kg
+
+IMMUNIZATION|Influenza|2026-02-10|0.5|mL|Intramuscular|Right Arm
+
+INSURANCE|BlueCross BlueShield Texas|PPO-TX-22|GRP-TX-9900|MBR-776543`;
+
 document.querySelectorAll('.sample-btn').forEach(btn => {
   btn.addEventListener('click', () => {
     const type = btn.dataset.type;
-    hl7Input.value = SAMPLES[type] || '';
-    // Ensure text tab is active
-    document.querySelectorAll('.input-tabs .tab-btn')[0].click();
+    const ehrType = btn.dataset.ehrType;
+    if (ehrType === 'ehr_sample') {
+      document.getElementById('ehr-input').value = EHR_SAMPLE;
+      document.querySelectorAll('.input-tabs .tab-btn')[0].click();
+    } else {
+      hl7Input.value = SAMPLES[type] || '';
+      document.querySelectorAll('.input-tabs .tab-btn')[0].click();
+    }
   });
+});
+
+document.getElementById('clear-ehr-btn')?.addEventListener('click', () => {
+  document.getElementById('ehr-input').value = '';
 });
 
 clearBtn.addEventListener('click', () => { hl7Input.value = ''; });
@@ -399,6 +637,21 @@ convertBtn.addEventListener('click', async () => {
       } else {
         await convertFhirToHl7(bundle);
       }
+    }
+    return;
+  }
+
+  // ── EHR Raw → FHIR ──────────────────────────────────────────────────────
+  if (conversionDirection === 'ehr_to_fhir') {
+    const text = document.getElementById('ehr-input').value.trim();
+    if (!text) {
+      showError('Please paste raw EHR data or load the sample.', []);
+      return;
+    }
+    if (aiModeEnabled) {
+      await aiConvertEhrToFhir(text);
+    } else {
+      await localConvertEhrToFhir(text);
     }
     return;
   }
@@ -544,6 +797,54 @@ async function aiConvertFhirToHl7(bundle) {
   }
 }
 
+async function localConvertEhrToFhir(ehrData) {
+  setLoading(true);
+  const spinnerLabel = document.getElementById('spinner-label');
+  if (spinnerLabel) spinnerLabel.textContent = 'Converting EHR data to FHIR…';
+  try {
+    const resp = await fetch(API_BASE + '/api/convert/ehr-to-fhir', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ ehr_data: ehrData }),
+    });
+    const data = await resp.json();
+    if (!resp.ok) {
+      showError(data.detail || 'EHR→FHIR conversion failed.', []);
+    } else {
+      handleResult(data);
+    }
+  } catch (err) {
+    showError('Network error: ' + err.message, []);
+  } finally {
+    setLoading(false);
+    if (spinnerLabel) spinnerLabel.textContent = 'Converting…';
+  }
+}
+
+async function aiConvertEhrToFhir(ehrData) {
+  setLoading(true);
+  const spinnerLabel = document.getElementById('spinner-label');
+  if (spinnerLabel) spinnerLabel.textContent = 'AI converting EHR data to FHIR…';
+  try {
+    const resp = await fetch(API_BASE + '/api/convert/ai/ehr-to-fhir', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ ehr_data: ehrData }),
+    });
+    const data = await resp.json();
+    if (!resp.ok) {
+      showError(data.detail || 'EHR→FHIR conversion failed.', []);
+    } else {
+      handleResult(data);
+    }
+  } catch (err) {
+    showError('Network error: ' + err.message, []);
+  } finally {
+    setLoading(false);
+    if (spinnerLabel) spinnerLabel.textContent = 'Converting…';
+  }
+}
+
 async function convertFile() {
   setLoading(true);
   try {
@@ -594,6 +895,7 @@ function handleResult(result) {
   if (aiOutputBadge) aiOutputBadge.classList.toggle('hidden', !result.ai_powered);
 
   const isFhirToHl7 = result.direction === 'fhir_to_hl7';
+  const isEhrToFhir = result.direction === 'ehr_to_fhir';
 
   // Status bar
   statusBar.classList.remove('hidden');
@@ -602,6 +904,13 @@ function handleResult(result) {
       <span class="status-badge status-success">✓ Converted</span>
       <span class="status-badge status-direction">FHIR → HL7</span>
       <span class="status-badge status-type">${escapeHtml(result.message_type || '?')}</span>
+    `;
+  } else if (isEhrToFhir) {
+    statusBadges.innerHTML = `
+      <span class="status-badge status-success">✓ Converted</span>
+      <span class="status-badge status-direction" style="background:rgba(5,150,105,0.15);color:#047857;border-color:rgba(5,150,105,0.3)">⚕ EHR → FHIR</span>
+      <span class="status-badge status-type">${escapeHtml(result.message_type || 'EHR')}</span>
+      <span class="status-badge status-type">${(result.resource_summary || []).length} FHIR Resources</span>
     `;
   } else {
     statusBadges.innerHTML = `
@@ -624,11 +933,15 @@ function handleResult(result) {
   const hl7outEl = document.getElementById('hl7out-output');
   if (hl7outEl) hl7outEl.textContent = result.hl7_output ? result.hl7_output.replace(/\r/g, '\n') : '';
 
-  // Show mappings tab for FHIR→HL7 direction when AI mode provides them
+  // Show/hide mappings tab based on direction and content
   const mappingsTab = document.getElementById('out-tab-mappings');
-  if (mappingsTab && isFhirToHl7) {
+  if (mappingsTab) {
     const hasMappings = (result.field_mappings || []).length > 0;
-    mappingsTab.classList.toggle('hidden', !hasMappings);
+    if (isFhirToHl7 || isEhrToFhir) {
+      mappingsTab.classList.toggle('hidden', !hasMappings);
+    } else {
+      mappingsTab.classList.remove('hidden');
+    }
   }
 
   // Activate the correct output tab for the current direction
@@ -638,6 +951,7 @@ function handleResult(result) {
     document.getElementById('out-tab-hl7out').classList.add('active');
     document.getElementById('out-hl7out').classList.add('active');
   } else {
+    // Both HL7→FHIR and EHR→FHIR show JSON first
     document.getElementById('out-tab-json').classList.add('active');
     document.getElementById('out-json').classList.add('active');
   }
