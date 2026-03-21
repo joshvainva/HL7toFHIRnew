@@ -89,32 +89,32 @@ class TestValidator:
 class TestMapper:
     def test_adt_produces_bundle(self):
         msg = parser.parse(ADT_MSG)
-        bundle, warnings = mapper.map(msg)
+        bundle, warnings, _ = mapper.map(msg)
         assert bundle["resourceType"] == "Bundle"
         assert len(bundle["entry"]) >= 1
 
     def test_adt_contains_patient(self):
         msg = parser.parse(ADT_MSG)
-        bundle, _ = mapper.map(msg)
+        bundle, _, _ = mapper.map(msg)
         types = [e["resource"]["resourceType"] for e in bundle["entry"]]
         assert "Patient" in types
 
     def test_adt_contains_encounter(self):
         msg = parser.parse(ADT_MSG)
-        bundle, _ = mapper.map(msg)
+        bundle, _, _ = mapper.map(msg)
         types = [e["resource"]["resourceType"] for e in bundle["entry"]]
         assert "Encounter" in types
 
     def test_oru_contains_observation(self):
         msg = parser.parse(ORU_MSG)
-        bundle, _ = mapper.map(msg)
+        bundle, _, _ = mapper.map(msg)
         types = [e["resource"]["resourceType"] for e in bundle["entry"]]
         assert "Observation" in types
         assert "DiagnosticReport" in types
 
     def test_orm_contains_service_request(self):
         msg = parser.parse(ORM_MSG)
-        bundle, _ = mapper.map(msg)
+        bundle, _, _ = mapper.map(msg)
         types = [e["resource"]["resourceType"] for e in bundle["entry"]]
         assert "ServiceRequest" in types
 
@@ -128,7 +128,7 @@ class TestMapper:
 
     def test_patient_name_extracted(self):
         msg = parser.parse(ADT_MSG)
-        bundle, _ = mapper.map(msg)
+        bundle, _, _ = mapper.map(msg)
         patient = next(
             e["resource"] for e in bundle["entry"]
             if e["resource"]["resourceType"] == "Patient"
@@ -138,7 +138,7 @@ class TestMapper:
 
     def test_observation_value(self):
         msg = parser.parse(ORU_MSG)
-        bundle, _ = mapper.map(msg)
+        bundle, _, _ = mapper.map(msg)
         obs = next(
             e["resource"] for e in bundle["entry"]
             if e["resource"]["resourceType"] == "Observation"
@@ -154,7 +154,7 @@ class TestRenderer:
         import json
         from app.core.renderer import to_fhir_json
         msg = parser.parse(ADT_MSG)
-        bundle, _ = mapper.map(msg)
+        bundle, _, _ = mapper.map(msg)
         json_str = to_fhir_json(bundle)
         parsed = json.loads(json_str)
         assert parsed["resourceType"] == "Bundle"
@@ -162,14 +162,14 @@ class TestRenderer:
     def test_xml_output(self):
         from app.core.renderer import to_fhir_xml
         msg = parser.parse(ADT_MSG)
-        bundle, _ = mapper.map(msg)
+        bundle, _, _ = mapper.map(msg)
         xml_str = to_fhir_xml(bundle)
         assert "<Bundle" in xml_str
 
     def test_human_readable(self):
         from app.core.renderer import to_human_readable
         msg = parser.parse(ADT_MSG)
-        bundle, warnings = mapper.map(msg)
+        bundle, warnings, _ = mapper.map(msg)
         report = to_human_readable(bundle, msg.version, msg.message_type, msg.message_event, warnings)
         assert "FHIR" in report
         assert "Patient" in report
