@@ -3,19 +3,21 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>HL7toFHIR message converter</title>
+  <title>EHR → FHIR Converter | Healthcare Interoperability Tool</title>
+  <link rel="icon" type="image/png" href="/static/innova_logo_alpha.png" />
   <link rel="stylesheet" href="/static/css/style.css" />
   <link rel="preconnect" href="https://fonts.googleapis.com" />
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet" />
 </head>
 <body>
   <!-- ===== HEADER ===== -->
   <header class="header">
     <div class="header-inner">
       <div class="logo">
-        <span class="logo-icon">⚕</span>
+        <img src="/static/innova_logo_alpha.png" alt="Innova Logo" class="logo-icon" style="width:44px;height:44px;object-fit:contain;mix-blend-mode:screen;filter:drop-shadow(0 0 12px rgba(212,175,55,0.4));" />
         <div>
-          <span class="logo-title">HL7toFHIR message converter</span>
+          <span class="logo-title">HL7 &amp; EHR → FHIR Converter</span>
           <span class="logo-sub">Healthcare Interoperability Tool</span>
         </div>
       </div>
@@ -63,18 +65,20 @@
         <div class="tab-content active" id="tab-text">
           <!-- HL7 input (shown when direction = hl7_to_fhir) -->
           <div id="hl7-input-area">
-            <textarea
-              id="hl7-input"
-              class="hl7-textarea"
-              placeholder="Paste your HL7 message here…
-
-Example:
-MSH|^~\&|SENDING|FACILITY|RECV|DEST|20240101120000||ADT^A01|MSG001|P|2.5
-EVN|A01|20240101120000
-PID|1||MRN12345^^^HOSP^MR||DOE^JOHN^A||19800315|M|||123 MAIN ST^^CHICAGO^IL^60601||(312)555-1234|||S
-PV1|1|I|ICU^101^A|E|||NPI123^SMITH^JANE|||SUR||||ADM|||V|||||||||||||||||||||||20240101120000"
-              spellcheck="false"
-            ></textarea>
+            <div class="textarea-wrapper">
+              <textarea
+                id="hl7-input"
+                class="hl7-textarea"
+                placeholder="Paste your HL7 message here…
+  
+  Example:
+  MSH|^~\&|SENDING|FACILITY|RECV|DEST|20240101120000||ADT^A01|MSG001|P|2.5
+  EVN|A01|20240101120000
+  PID|1||MRN12345^^^HOSP^MR||DOE^JOHN^A||19800315|M|||123 MAIN ST^^CHICAGO^IL^60601||(312)555-1234|||S
+  PV1|1|I|ICU^101^A|E|||NPI123^SMITH^JANE|||SUR||||ADM|||V|||||||||||||||||||||||20240101120000"
+                spellcheck="false"
+              ></textarea>
+            </div>
             <div class="sample-bar">
               <span class="sample-label">Generic:</span>
               <button class="sample-btn" data-type="adt">ADT^A01</button>
@@ -104,29 +108,31 @@ PV1|1|I|ICU^101^A|E|||NPI123^SMITH^JANE|||SUR||||ADM|||V|||||||||||||||||||||||2
           </div>
           <!-- FHIR input (shown when direction = fhir_to_hl7) -->
           <div id="fhir-input-area" class="hidden">
-            <textarea
-              id="fhir-input"
-              class="hl7-textarea fhir-textarea"
-              placeholder='Paste your FHIR Bundle JSON here…
-
-Example:
-{
-  "resourceType": "Bundle",
-  "type": "collection",
-  "entry": [
-    {
-      "resource": {
-        "resourceType": "Patient",
-        "id": "p1",
-        "name": [{"family": "DOE", "given": ["JOHN"]}],
-        "birthDate": "1980-03-15",
-        "gender": "male"
+            <div class="textarea-wrapper">
+              <textarea
+                id="fhir-input"
+                class="hl7-textarea fhir-textarea"
+                placeholder='Paste your FHIR Bundle JSON here…
+  
+  Example:
+  {
+    "resourceType": "Bundle",
+    "type": "collection",
+    "entry": [
+      {
+        "resource": {
+          "resourceType": "Patient",
+          "id": "p1",
+          "name": [{"family": "DOE", "given": ["JOHN"]}],
+          "birthDate": "1980-03-15",
+          "gender": "male"
+        }
       }
-    }
-  ]
-}'
-              spellcheck="false"
-            ></textarea>
+    ]
+  }'
+                spellcheck="false"
+              ></textarea>
+            </div>
             <div class="sample-bar">
               <span class="sample-label">Load sample:</span>
               <button class="sample-btn fhir-sample-btn" data-fhir-type="adt">ADT Bundle</button>
@@ -140,33 +146,35 @@ Example:
             <div class="ehr-input-banner">
               ⚕ <strong>EHR Raw Data Mode</strong> — Paste structured EHR data (any format: key-value, CSV, clinical notes, export text). AI will convert directly to FHIR R4.
             </div>
-            <textarea
-              id="ehr-input"
-              class="hl7-textarea ehr-textarea"
-              placeholder="Paste raw EHR data here — any format supported:
-
-PATIENT
-MRN: MRN-2026-001
-First Name: John
-Last Name: Doe
-DOB: 1980-03-15
-Gender: Male
-
-ENCOUNTER
-Visit Type: Outpatient
-Provider: Dr. Jane Smith
-
-LAB RESULTS
-Glucose: 95 mg/dL (Normal)
-Hemoglobin: 14.2 g/dL (Normal)
-
-DIAGNOSES
-1. J45.20 - Mild persistent asthma
-
-ALLERGIES
-Penicillin - Severe rash"
-              spellcheck="false"
-            ></textarea>
+            <div class="textarea-wrapper">
+              <textarea
+                id="ehr-input"
+                class="hl7-textarea ehr-textarea"
+                placeholder="Paste raw EHR data here — any format supported:
+  
+  PATIENT
+  MRN: MRN-2026-001
+  First Name: John
+  Last Name: Doe
+  DOB: 1980-03-15
+  Gender: Male
+  
+  ENCOUNTER
+  Visit Type: Outpatient
+  Provider: Dr. Jane Smith
+  
+  LAB RESULTS
+  Glucose: 95 mg/dL (Normal)
+  Hemoglobin: 14.2 g/dL (Normal)
+  
+  DIAGNOSES
+  1. J45.20 - Mild persistent asthma
+  
+  ALLERGIES
+  Penicillin - Severe rash"
+                spellcheck="false"
+              ></textarea>
+            </div>
             <div class="sample-bar">
               <span class="sample-label">Load sample:</span>
               <button class="sample-btn ehr-raw-btn" data-ehr-type="ehr_sample">EHR Sample</button>
@@ -599,7 +607,16 @@ Penicillin - Severe rash"
       <!-- ===== OUTPUT PANEL ===== -->
       <section class="panel output-panel hidden" id="output-panel">
         <div class="panel-header">
-          <h2 class="panel-title">Output <span class="ai-output-badge hidden" id="ai-output-badge">✨ AI Generated</span></h2>
+          <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:0.5rem;">
+            <h2 class="panel-title">Output <span class="ai-output-badge hidden" id="ai-output-badge">✨ AI Generated</span></h2>
+            <!-- Persistent download toolbar — visible on all tabs -->
+            <div class="toolbar-actions" id="persistent-download-toolbar" style="display:flex; gap:0.5rem;">
+              <button class="tool-btn" onclick="copyOutput('json')">📋 Copy</button>
+              <button class="tool-btn" onclick="downloadOutput('json', 'fhir_bundle_'+getTs()+'.json', 'application/json')">⬇ JSON</button>
+              <button class="tool-btn" onclick="downloadOutput('csv', 'fhir_export_'+getTs()+'.zip', 'text/csv')">⬇ CSV</button>
+              <button class="tool-btn" onclick="downloadOutput('xlsx', 'fhir_export_'+getTs()+'.xlsx', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')">⬇ Excel</button>
+            </div>
+          </div>
           <div class="output-tabs">
             <button class="tab-btn active" data-out-tab="json" id="out-tab-json">FHIR JSON</button>
             <button class="tab-btn" data-out-tab="xml" id="out-tab-xml">FHIR XML</button>
@@ -614,12 +631,10 @@ Penicillin - Severe rash"
         <div class="out-content active" id="out-json">
           <div class="output-toolbar">
             <span class="lang-badge">JSON</span>
-            <div class="toolbar-actions">
-              <button class="tool-btn" onclick="copyOutput('json')">📋 Copy</button>
-              <button class="tool-btn" onclick="downloadOutput('json', 'fhir_bundle.json', 'application/json')">⬇ Download</button>
-            </div>
           </div>
-          <pre class="code-block" id="json-output"></pre>
+          <div class="textarea-wrapper">
+            <pre class="code-block" id="json-output"></pre>
+          </div>
         </div>
 
         <!-- XML -->
@@ -631,7 +646,9 @@ Penicillin - Severe rash"
               <button class="tool-btn" onclick="downloadOutput('xml', 'fhir_bundle.xml', 'application/xml')">⬇ Download</button>
             </div>
           </div>
-          <pre class="code-block" id="xml-output"></pre>
+          <div class="textarea-wrapper">
+            <pre class="code-block" id="xml-output"></pre>
+          </div>
         </div>
 
         <!-- PDF Report -->
@@ -642,7 +659,9 @@ Penicillin - Severe rash"
               <button class="tool-btn" id="btn-generate-pdf" onclick="generatePDF()">⬇ Download PDF Report</button>
             </div>
           </div>
-          <div class="pdf-preview" id="pdf-preview"></div>
+          <div class="textarea-wrapper">
+            <div class="pdf-preview" id="pdf-preview"></div>
+          </div>
         </div>
 
         <!-- Summary -->
@@ -650,7 +669,9 @@ Penicillin - Severe rash"
           <div class="output-toolbar">
             <span class="lang-badge lang-sum">SUMMARY</span>
           </div>
-          <div id="summary-content" class="summary-grid"></div>
+          <div class="textarea-wrapper">
+            <div id="summary-content" class="summary-grid"></div>
+          </div>
         </div>
 
         <!-- Field Mappings -->
@@ -658,7 +679,9 @@ Penicillin - Severe rash"
           <div class="output-toolbar">
             <span class="lang-badge lang-map">MAPPINGS</span>
           </div>
-          <div id="mappings-content" class="mappings-container"></div>
+          <div class="textarea-wrapper">
+            <div id="mappings-content" class="mappings-container"></div>
+          </div>
         </div>
 
         <!-- HL7 Output (FHIR→HL7 direction) -->
@@ -670,7 +693,9 @@ Penicillin - Severe rash"
               <button class="tool-btn" onclick="downloadOutput('hl7out', 'message.hl7', 'text/plain')">⬇ Download</button>
             </div>
           </div>
-          <pre class="code-block" id="hl7out-output"></pre>
+          <div class="textarea-wrapper">
+            <pre class="code-block" id="hl7out-output"></pre>
+          </div>
         </div>
       </section>
 
@@ -684,6 +709,8 @@ Penicillin - Severe rash"
 
   <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.8.2/jspdf.plugin.autotable.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/xlsx-js-style@1.2.0/dist/xlsx.bundle.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
   <script src="/static/js/app.js"></script>
 </body>
 </html>

@@ -110,6 +110,9 @@ def _parse_patient(cols: List[str], ctx: dict) -> dict:
     zipcode = cols[11] if len(cols) > 11 else ""
 
     ctx["patient_id"] = mrn
+    ctx["p_first"] = first
+    ctx["p_last"] = last
+    ctx["p_dob"] = cols[4] if len(cols) > 4 else ""
 
     res: dict = {
         "resourceType": "Patient",
@@ -440,6 +443,108 @@ def _parse_nk1(cols: List[str], ctx: dict) -> dict:
     return res
 
 
+def _parse_chief_complaint(cols: List[str], ctx: dict) -> dict:
+    """CHIEF_COMPLAINT|Description"""
+    desc = cols[1] if len(cols) > 1 else "Unknown"
+    ctx.setdefault("cc_seq", 0)
+    ctx["cc_seq"] += 1
+    seq = ctx["cc_seq"]
+    
+    return {
+        "resourceType": "Condition",
+        "id": f"cc-{seq}",
+        "clinicalStatus": {"coding": [{"code": "active"}]},
+        "category": [{"coding": [{"system": "http://terminology.hl7.org/CodeSystem/condition-category", "code": "encounter-diagnosis", "display": "Encounter Diagnosis"}]}],
+        "subject": {"reference": f"Patient/{ctx.get('patient_id', 'unknown')}"},
+        "encounter": {"reference": f"Encounter/{ctx.get('encounter_id', 'unknown')}"},
+        "code": {"text": desc},
+    }
+
+
+def _parse_symptom(cols: List[str], ctx: dict) -> dict:
+    """SYMPTOM|Symptom|Severity|Duration"""
+    symptom = cols[1] if len(cols) > 1 else "Unknown"
+    severity = cols[2] if len(cols) > 2 else ""
+    duration = cols[3] if len(cols) > 3 else ""
+    ctx.setdefault("symp_seq", 0)
+    ctx["symp_seq"] += 1
+    seq = ctx["symp_seq"]
+    res = {
+        "resourceType": "Condition",
+        "id": f"symptom-{seq}",
+        "clinicalStatus": {"coding": [{"code": "active"}]},
+        "category": [{"coding": [{"system": "http://terminology.hl7.org/CodeSystem/condition-category", "code": "problem-list-item", "display": "Problem List Item"}]}],
+        "subject": {"reference": f"Patient/{ctx.get('patient_id', 'unknown')}"},
+        "encounter": {"reference": f"Encounter/{ctx.get('encounter_id', 'unknown')}"},
+        "code": {"text": symptom},
+    }
+    if severity:
+        res["severity"] = {"text": severity}
+    return res
+
+
+def _parse_procedure(cols: List[str], ctx: dict) -> dict:
+    """PROCEDURE|Code|Description|Date"""
+    code = cols[1] if len(cols) > 1 else ""
+    desc = cols[2] if len(cols) > 2 else "Unknown"
+    date = _fmt_datetime(cols[3]) if len(cols) > 3 else None
+    ctx.setdefault("proc_seq", 0)
+    ctx["proc_seq"] += 1
+    seq = ctx["proc_seq"]
+    res = {
+        "resourceType": "Procedure",
+        "id": f"proc-{seq}",
+        "status": "completed",
+        "subject": {"reference": f"Patient/{ctx.get('patient_id', 'unknown')}"},
+        "encounter": {"reference": f"Encounter/{ctx.get('encounter_id', 'unknown')}"},
+        "code": {"coding": [{"code": code, "display": desc}], "text": desc},
+    }
+    if date:
+        res["performedDateTime"] = date
+    return res
+
+
+def _parse_medication(cols: List[str], ctx: dict) -> dict:
+    """MEDICATION|Name|Dose|Route|Frequency"""
+    name = cols[1] if len(cols) > 1 else "Unknown"
+    dose = cols[2] if len(cols) > 2 else ""
+    route = cols[3] if len(cols) > 3 else ""
+    freq = cols[4] if len(cols) > 4 else ""
+    ctx.setdefault("med_seq", 0)
+    ctx["med_seq"] += 1
+    seq = ctx["med_seq"]
+    
+    res = {
+        "resourceType": "MedicationStatement",
+        "id": f"med-{seq}",
+        "status": "active",
+        "subject": {"reference": f"Patient/{ctx.get('patient_id', 'unknown')}"},
+        "encounter": {"reference": f"Encounter/{ctx.get('encounter_id', 'unknown')}"},
+        "medicationCodeableConcept": {"text": name},
+    }
+    sig = f"{dose} {route} {freq}".strip()
+    if sig:
+        res["dosage"] = [{"text": sig, "route": {"text": route}, "timing": {"code": {"text": freq}}}]
+    return res
+
+
+def _parse_clinical_note(cols: List[str], ctx: dict) -> dict:
+    """CLINICAL_NOTE|NoteText"""
+    note = cols[1] if len(cols) > 1 else ""
+    ctx.setdefault("note_seq", 0)
+    ctx["note_seq"] += 1
+    seq = ctx["note_seq"]
+    
+    return {
+        "resourceType": "ClinicalImpression",
+        "id": f"note-{seq}",
+        "status": "completed",
+        "subject": {"reference": f"Patient/{ctx.get('patient_id', 'unknown')}"},
+        "encounter": {"reference": f"Encounter/{ctx.get('encounter_id', 'unknown')}"},
+        "summary": note,
+    }
+
+
 # ─────────────────────────────────────────────────────────────────────────────
 # Field mappings builder
 # ─────────────────────────────────────────────────────────────────────────────
@@ -455,6 +560,11 @@ _FIELD_DEFS = {
     "IMMUNIZATION":["Vaccine Name", "Date", "Dose", "Unit", "Route", "Site"],
     "INSURANCE":   ["Provider Name", "Plan", "Group", "Member ID"],
     "NK1":         ["Seq", "Name", "Relationship", "Phone"],
+    "CHIEF_COMPLAINT":["Description"],
+    "SYMPTOM":     ["Symptom", "Severity", "Duration"],
+    "PROCEDURE":   ["Code", "Description", "Date"],
+    "MEDICATION":  ["Name", "Dose", "Route", "Frequency"],
+    "CLINICAL_NOTE":["Note Text"],
 }
 
 _FHIR_MAP = {
@@ -468,11 +578,16 @@ _FHIR_MAP = {
     "IMMUNIZATION":["vaccineCode.text", "occurrenceDateTime", "doseQuantity.value", "doseQuantity.unit", "route.text", "site.text"],
     "INSURANCE":   ["payor[0].display", "class[plan].value", "class[group].value", "subscriberId"],
     "NK1":         ["id (seq)", "name[0].text", "relationship[0].text", "telecom[0].value"],
+    "CHIEF_COMPLAINT":["code.text"],
+    "SYMPTOM":     ["code.text", "severity.text", ""],
+    "PROCEDURE":   ["code.coding[0].code", "code.text", "performedDateTime"],
+    "MEDICATION":  ["medicationCodeableConcept.text", "dosage[0].text", "dosage[0].route.text", "dosage[0].timing.code.text"],
+    "CLINICAL_NOTE":["summary"],
 }
 
 
-def _build_mappings(lines_by_type: Dict[str, List[List[str]]]) -> List[dict]:
-    """Build field_mappings array from parsed line data."""
+def _build_mappings(parsed_lines: List[tuple], is_multi_patient: bool = False) -> List[dict]:
+    """Build field_mappings array sequentially, injecting patient identity into each mapping row."""
     mappings = []
     resource_type_map = {
         "PATIENT": "Patient", "ENCOUNTER": "Encounter",
@@ -480,30 +595,52 @@ def _build_mappings(lines_by_type: Dict[str, List[List[str]]]) -> List[dict]:
         "LAB_ORDER": "ServiceRequest", "LAB_RESULT": "Observation",
         "VITAL": "Observation", "IMMUNIZATION": "Immunization",
         "INSURANCE": "Coverage", "NK1": "RelatedPerson",
+        "CHIEF_COMPLAINT": "Condition", "SYMPTOM": "Condition",
+        "PROCEDURE": "Procedure", "MEDICATION": "MedicationStatement",
+        "CLINICAL_NOTE": "ClinicalImpression",
     }
-    for record_type, lines in lines_by_type.items():
+    for record_type, line_cols, p_first, p_last, p_dob in parsed_lines:
         field_names = _FIELD_DEFS.get(record_type, [])
         fhir_fields = _FHIR_MAP.get(record_type, [])
         rt = resource_type_map.get(record_type, record_type)
-        for line_cols in lines:
-            seq_id = line_cols[1] if len(line_cols) > 1 else "?"
-            fm = []
-            for i, (fname, fhir_path) in enumerate(zip(field_names, fhir_fields)):
-                col_idx = i + 1
-                val = line_cols[col_idx] if col_idx < len(line_cols) else ""
-                if val:
-                    fm.append({
-                        "fhir_field": fhir_path,
-                        "hl7_segment": record_type,
-                        "hl7_field": str(col_idx),
-                        "hl7_value": val,
-                        "description": fname,
-                    })
-            mappings.append({
-                "resource_type": rt,
-                "resource_id": seq_id,
-                "field_mappings": fm,
-            })
+        seq_id = line_cols[1] if len(line_cols) > 1 else "?"
+        fm = []
+
+        # Add Patient context column to EVERY row ONLY if there are multiple patients
+        if is_multi_patient:
+            if p_first or p_last:
+                fm.append({
+                    "fhir_field": "Patient.name",
+                    "hl7_segment": record_type,
+                    "hl7_field": "Patient Name",
+                    "hl7_value": f"{p_first} {p_last}".strip(),
+                    "description": "Patient Name",
+                })
+            if p_dob:
+                fm.append({
+                    "fhir_field": "Patient.birthDate",
+                    "hl7_segment": record_type,
+                    "hl7_field": "DOB",
+                    "hl7_value": p_dob,
+                    "description": "DOB",
+                })
+
+        for i, (fname, fhir_path) in enumerate(zip(field_names, fhir_fields)):
+            col_idx = i + 1
+            val = line_cols[col_idx] if col_idx < len(line_cols) else ""
+            if val:
+                fm.append({
+                    "fhir_field": fhir_path,
+                    "hl7_segment": record_type,
+                    "hl7_field": str(col_idx),
+                    "hl7_value": val,
+                    "description": fname,
+                })
+        mappings.append({
+            "resource_type": rt,
+            "resource_id": seq_id,
+            "field_mappings": fm,
+        })
     return mappings
 
 
@@ -519,20 +656,23 @@ def convert_ehr_pipe_to_fhir(ehr_text: str) -> dict:
     resources: List[dict] = []
     ctx: dict = {}
     warnings: List[str] = []
-    lines_by_type: Dict[str, List[List[str]]] = {}
+    parsed_lines: List[tuple] = []
 
     # Determine message type after parsing
     has_obs = False
     has_svc = False
 
-    for raw_line in ehr_text.replace("\r", "\n").split("\n"):
+    raw_lines = ehr_text.replace("\r", "\n").split("\n")
+    patient_count = sum(1 for line in raw_lines if line.strip() and not line.strip().startswith("#") and _cols(line.strip())[0].upper() == "PATIENT")
+    is_multi_patient = patient_count > 1
+
+    for raw_line in raw_lines:
         line = raw_line.strip()
-        if not line:
+        if not line or line.startswith("#"):
             continue
 
         cols = _cols(line)
         record_type = cols[0].upper()
-        lines_by_type.setdefault(record_type, []).append(cols)
 
         try:
             if record_type == "PATIENT":
@@ -559,11 +699,23 @@ def convert_ehr_pipe_to_fhir(ehr_text: str) -> dict:
                 resources.append(_parse_insurance(cols, ctx))
             elif record_type == "NK1":
                 resources.append(_parse_nk1(cols, ctx))
+            elif record_type == "CHIEF_COMPLAINT":
+                resources.append(_parse_chief_complaint(cols, ctx))
+            elif record_type == "SYMPTOM":
+                resources.append(_parse_symptom(cols, ctx))
+            elif record_type == "PROCEDURE":
+                resources.append(_parse_procedure(cols, ctx))
+            elif record_type == "MEDICATION":
+                resources.append(_parse_medication(cols, ctx))
+            elif record_type == "CLINICAL_NOTE":
+                resources.append(_parse_clinical_note(cols, ctx))
             else:
                 warnings.append(f"Unrecognised record type '{record_type}' — skipped.")
         except Exception as exc:
             warnings.append(f"Error parsing {record_type} line: {exc}")
             logger.warning("EHR parser error on line '%s': %s", line, exc)
+
+        parsed_lines.append((record_type, cols, ctx.get("p_first", ""), ctx.get("p_last", ""), ctx.get("p_dob", "")))
 
     if not resources:
         return {"success": False, "errors": ["No valid EHR records found. Check the format."], "warnings": warnings}
@@ -640,12 +792,18 @@ def convert_ehr_pipe_to_fhir(ehr_text: str) -> dict:
             desc = r.get("code", {}).get("text", "ServiceRequest")
         elif rt == "DiagnosticReport":
             desc = r.get("code", {}).get("text", "DiagnosticReport")
+        elif rt == "Procedure":
+            desc = r.get("code", {}).get("text", "Procedure")
+        elif rt == "MedicationStatement":
+            desc = r.get("medicationCodeableConcept", {}).get("text", "Medication")
+        elif rt == "ClinicalImpression":
+            desc = r.get("summary", "Clinical Note")
         else:
             desc = f"{rt} resource"
         resource_summary.append({"resource_type": rt, "resource_id": rid, "description": desc})
 
-    # Build field mappings
-    field_mappings = _build_mappings(lines_by_type)
+    # Build field mappings natively retaining sequential array flow
+    field_mappings = _build_mappings(parsed_lines, is_multi_patient)
 
     return {
         "success": True,

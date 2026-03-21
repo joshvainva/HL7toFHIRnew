@@ -34,20 +34,38 @@ class ExcelHandler(BaseFileHandler):
             raise ValueError(f"Could not open Excel file: {exc}") from exc
 
         messages = []
+        ehr_lines = []
+        is_ehr = False
+        valid_sheets = {"PATIENT", "ENCOUNTER", "ALLERGY", "DIAGNOSIS", "LAB_ORDER", "LAB_RESULT", "VITAL", "IMMUNIZATION", "INSURANCE", "NK1", "CHIEF_COMPLAINT", "SYMPTOM", "PROCEDURE", "MEDICATION", "CLINICAL_NOTE"}
+
         for sheet in wb.worksheets:
-            for row in sheet.iter_rows(values_only=True):
-                for cell_val in row:
-                    if cell_val is None:
-                        continue
-                    text = str(cell_val).strip()
-                    if text.upper().startswith("MSH|"):
-                        messages.append(text)
-                        break  # one message per row
+            sheet_title = sheet.title.strip().upper()
+            if sheet_title in valid_sheets:
+                is_ehr = True
+                for row in sheet.iter_rows(values_only=True):
+                    if not any(row): continue
+                    str_row = [str(c).strip() if c is not None else "" for c in row]
+                    if str_row[0].strip().upper() == sheet_title:
+                        ehr_lines.append("|".join(str_row))
+                    else:
+                        ehr_lines.append(sheet_title + "|" + "|".join(str_row))
+            else:
+                for row in sheet.iter_rows(values_only=True):
+                    for cell_val in row:
+                        if cell_val is None:
+                            continue
+                        text = str(cell_val).strip()
+                        if text.upper().startswith("MSH|"):
+                            messages.append(text)
+                            break  # one message per row
+
+        if is_ehr and ehr_lines:
+            messages.append("\n".join(ehr_lines))
 
         if not messages:
             raise ValueError(
-                "No HL7 messages found in Excel file. "
-                "Cells should contain HL7 messages starting with MSH|."
+                "No HL7 or EHR messages found in Excel file. "
+                "Cells should contain HL7 messages starting with MSH|, or sheets should be named after EHR segments (PATIENT, ENCOUNTER, etc)."
             )
         return messages
 
@@ -63,17 +81,38 @@ class ExcelHandler(BaseFileHandler):
             raise ValueError(f"Could not open .xls file: {exc}") from exc
 
         messages = []
+        ehr_lines = []
+        is_ehr = False
+        valid_sheets = {"PATIENT", "ENCOUNTER", "ALLERGY", "DIAGNOSIS", "LAB_ORDER", "LAB_RESULT", "VITAL", "IMMUNIZATION", "INSURANCE", "NK1", "CHIEF_COMPLAINT", "SYMPTOM", "PROCEDURE", "MEDICATION", "CLINICAL_NOTE"}
+
         for sheet in wb.sheets():
-            for row_idx in range(sheet.nrows):
-                for col_idx in range(sheet.ncols):
-                    cell_val = sheet.cell_value(row_idx, col_idx)
-                    if not cell_val:
-                        continue
-                    text = str(cell_val).strip()
-                    if text.upper().startswith("MSH|"):
-                        messages.append(text)
-                        break
+            sheet_title = str(sheet.name).strip().upper()
+            if sheet_title in valid_sheets:
+                is_ehr = True
+                for row_idx in range(sheet.nrows):
+                    row_vals = []
+                    for col_idx in range(sheet.ncols):
+                        cell_val = sheet.cell_value(row_idx, col_idx)
+                        row_vals.append(str(cell_val).strip() if cell_val else "")
+                    if not any(row_vals): continue
+                    if row_vals[0].strip().upper() == sheet_title:
+                        ehr_lines.append("|".join(row_vals))
+                    else:
+                        ehr_lines.append(sheet_title + "|" + "|".join(row_vals))
+            else:
+                for row_idx in range(sheet.nrows):
+                    for col_idx in range(sheet.ncols):
+                        cell_val = sheet.cell_value(row_idx, col_idx)
+                        if not cell_val:
+                            continue
+                        text = str(cell_val).strip()
+                        if text.upper().startswith("MSH|"):
+                            messages.append(text)
+                            break
+
+        if is_ehr and ehr_lines:
+            messages.append("\n".join(ehr_lines))
 
         if not messages:
-            raise ValueError("No HL7 messages found in .xls file.")
+            raise ValueError("No HL7 messages found in .xls file. Sheets should be named after EHR segments.")
         return messages

@@ -26,17 +26,35 @@ class CSVHandler(BaseFileHandler):
 
         reader = csv.reader(io.StringIO(text))
         messages = []
+        ehr_lines = []
+        
+        valid_ehr_types = {"PATIENT", "ENCOUNTER", "ALLERGY", "DIAGNOSIS", "LAB_ORDER", "LAB_RESULT", "VITAL", "IMMUNIZATION", "INSURANCE", "NK1", "CHIEF_COMPLAINT", "SYMPTOM", "PROCEDURE", "MEDICATION", "CLINICAL_NOTE"}
 
         for row_num, row in enumerate(reader, start=1):
+            if not row or not any(c.strip() for c in row):
+                continue
+                
+            first_cell = row[0].strip().upper()
+            
+            # Check if this row is an EHR segment
+            if first_cell in valid_ehr_types or "PATIENT|" in row[0]:
+                str_row = [str(c).strip() for c in row]
+                ehr_lines.append("|".join(str_row))
+                continue
+
             for cell in row:
                 cell = cell.strip()
                 if cell.upper().startswith("MSH|"):
                     messages.append(cell)
-                    break  # only one message per row
+                    break  # only one HL7 per row
+
+        if ehr_lines:
+            # We found EHR-style rows; group them into a single big message
+            messages.append("\n".join(ehr_lines))
 
         if not messages:
             raise ValueError(
-                "No HL7 messages found in CSV file. "
-                "Each row should contain an HL7 message starting with MSH|."
+                "No HL7 or EHR messages found in CSV file. "
+                "Each row should contain an HL7 message starting with MSH|, or an EHR segment starting with PATIENT/ENCOUNTER/etc."
             )
         return messages

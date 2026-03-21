@@ -944,6 +944,19 @@ function handleResult(result) {
     }
   }
 
+  // Show/hide HL7 Message tab — irrelevant for EHR→FHIR direction
+  const hl7outTab = document.getElementById('out-tab-hl7out');
+  if (hl7outTab) {
+    if (isEhrToFhir) {
+      hl7outTab.classList.add('hidden');
+    } else if (isFhirToHl7) {
+      hl7outTab.classList.remove('hidden');
+    } else {
+      // HL7→FHIR: keep hidden (it's only for FHIR→HL7 output)
+      hl7outTab.classList.add('hidden');
+    }
+  }
+
   // Activate the correct output tab for the current direction
   document.querySelectorAll('.output-tabs .tab-btn').forEach(b => b.classList.remove('active'));
   document.querySelectorAll('.out-content').forEach(c => c.classList.remove('active'));
@@ -1248,8 +1261,26 @@ window.copyOutput = async function(type) {
   }
 };
 
+// Helper: compact timestamp string "20260320_221302" for filenames
+window.getTs = function() {
+  const d = new Date();
+  const pad = n => String(n).padStart(2, '0');
+  return `${d.getFullYear()}${pad(d.getMonth()+1)}${pad(d.getDate())}_${pad(d.getHours())}${pad(d.getMinutes())}${pad(d.getSeconds())}`;
+};
+
 window.downloadOutput = function(type, filename, mimeType) {
   if (!currentResult) return;
+  
+  if (type === 'csv' || type === 'xlsx') {
+    exportDataToSpreadsheet(type, filename);
+    return;
+  }
+
+  if (type === 'json' && currentResult.fhir_json && currentResult.fhir_json.entry) {
+    downloadPatientGroupedJson();
+    return;
+  }
+
   let content = '';
   if (type === 'json') {
     content = JSON.stringify(currentResult.fhir_json, null, 2);
@@ -1268,6 +1299,271 @@ window.downloadOutput = function(type, filename, mimeType) {
   document.body.removeChild(a);
   URL.revokeObjectURL(url);
 };
+
+function downloadPatientGroupedJson() {
+  const entries = currentResult.fhir_json.entry || [];
+  const patientGroups = {}; // key: patientId, value: array of entries
+
+  let lastPid = 'unknown';
+
+  // Group entries by their patient reference
+  entries.forEach(entry => {
+    const r = entry.resource;
+    if (!r) return;
+    
+    let pid = 'unknown';
+    if (r.resourceType === 'Patient') {
+      pid = r.id || 'unknown';
+    } else if (r.subject && r.subject.reference && r.subject.reference.startsWith('Patient/')) {
+      pid = r.subject.reference.substring(8);
+    } else if (r.patient && r.patient.reference && r.patient.reference.startsWith('Patient/')) {
+      pid = r.patient.reference.substring(8);
+    }
+    
+    // Assign orphaned resources (like Practitioner) to the last seen Patient
+    if (pid !== 'unknown') {
+      lastPid = pid;
+    } else {
+      pid = lastPid;
+    }
+    
+    if (pid === 'unknown') return; // Exclude anything before the first patient
+
+    if (!patientGroups[pid]) patientGroups[pid] = [];
+    patientGroups[pid].push(entry);
+  });
+
+  const pids = Object.keys(patientGroups);
+
+  // Fallback if no specific patients exist
+  if (pids.length === 0 || (pids.length === 1 && pids[0] === 'unknown')) {
+    const content = JSON.stringify(currentResult.fhir_json, null, 2);
+    downloadFile(content, 'fhir_bundle.json', 'application/json');
+    return;
+  }
+
+  const generatedFiles = [];
+
+  pids.forEach(pid => {
+    const groupEntries = patientGroups[pid];
+    const patientEntry = groupEntries.find(e => e.resource && e.resource.resourceType === 'Patient');
+    const patientRes = patientEntry ? patientEntry.resource : null;
+    
+    let fName = 'patient';
+    let lName = pid;
+    let dob = 'unknown';
+    
+    // Extract naming metadata
+    if (patientRes) {
+      if (patientRes.name && patientRes.name[0]) {
+        if (patientRes.name[0].given && patientRes.name[0].given.length > 0) fName = patientRes.name[0].given.join('_');
+        if (patientRes.name[0].family) lName = patientRes.name[0].family;
+      }
+      if (patientRes.birthDate) dob = patientRes.birthDate;
+    }
+    
+    // Sanitize filename
+    let fileName = `${fName}_${lName}_${dob}`.replace(/[^a-z0-9_-]/gi, '_');
+    fileName += '.json';
+
+    const bundle = {
+      resourceType: 'Bundle',
+      type: 'collection',
+      entry: groupEntries
+    };
+    
+    generatedFiles.push({ name: fileName, content: JSON.stringify(bundle, null, 2) });
+  });
+
+  if (generatedFiles.length === 1) {
+    // Only 1 patient -> Download JSON directly with timestamp
+    const ts = getTs();
+    downloadFile(generatedFiles[0].content, generatedFiles[0].name.replace('.json', `_${ts}.json`), 'application/json');
+  } else {
+    // Multiple patients -> Zip them using JSZip with timestamp
+    if (!window.JSZip) {
+      alert("ZIP library is not loaded. Cannot export multiple JSONs.");
+      return;
+    }
+    const zip = new JSZip();
+    generatedFiles.forEach(f => {
+      zip.file(f.name, f.content);
+    });
+    zip.generateAsync({ type: "blob" }).then(function(content) {
+      const url = URL.createObjectURL(content);
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = `fhir_patients_${getTs()}.zip`;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      URL.revokeObjectURL(url);
+    });
+  }
+}
+
+function exportDataToSpreadsheet(format, filename) {
+  if (!currentResult) return;
+  if (!window.XLSX) {
+    alert("Spreadsheet library is not loaded. Check internet connection.");
+    return;
+  }
+
+  // Build sheets by Resource Type
+  const sheets = {};
+
+  (currentResult.field_mappings || []).forEach(rm => {
+    // Generate sheet names directly from the original EHR Segment (e.g., SYMPTOM, VITAL)
+    // so that dissimilar records (like Vitals vs Lab Results) aren't mixed into one tab.
+    let rt = rm.resource_type;
+    let seg = (rm.field_mappings && rm.field_mappings.length > 0) ? rm.field_mappings[0].hl7_segment : null;
+    
+    if (seg) {
+      // Convert "LAB_RESULT" to "Lab Result"
+      rt = seg.toLowerCase().split('_').map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ');
+      
+      // Some manual overrides just in case
+      if (rt === "Medication") rt = "Medication Statement";
+    } else {
+      if (rt === "ClinicalImpression") rt = "Clinical note";
+      if (rt === "AllergyIntolerance") rt = "Allergy";
+    }
+    
+    if (!sheets[rt]) sheets[rt] = [];
+    
+    const row = {};
+    (rm.field_mappings || []).forEach(f => {
+      // Use the original EHR column header from description (e.g., "MRN", "First Name")
+      // fallback to fhir_field if empty
+      let colName = f.description || f.fhir_field; 
+      row[colName] = f.hl7_value || '';
+    });
+    sheets[rt].push(row);
+  });
+
+  if (Object.keys(sheets).length === 0) {
+    alert("No mapped data available to export.");
+    return;
+  }
+
+  const wb = XLSX.utils.book_new();
+  
+  for (const [rt, rows] of Object.entries(sheets)) {
+    // Excel sheet names max length is 31
+    const sheetName = rt.substring(0, 31);
+    const ws = XLSX.utils.json_to_sheet(rows);
+
+    // Apply Styles (Requires xlsx-js-style)
+    if (ws['!ref']) {
+      const range = XLSX.utils.decode_range(ws['!ref']);
+      for (let R = range.s.r; R <= range.e.r; ++R) {
+        for (let C = range.s.c; C <= range.e.c; ++C) {
+          const address = XLSX.utils.encode_cell({ c: C, r: R });
+          if (!ws[address]) continue;
+          
+          if (R === 0) {
+            // Header Row Styling: Cool Blue Header, White Bold Text, Full Borders
+            ws[address].s = {
+              fill: { fgColor: { rgb: "FF4F81BD" } },
+              font: { bold: true, color: { rgb: "FFFFFFFF" } },
+              border: {
+                top: { style: "thin", color: { rgb: "FF000000" } },
+                bottom: { style: "thin", color: { rgb: "FF000000" } },
+                left: { style: "thin", color: { rgb: "FF000000" } },
+                right: { style: "thin", color: { rgb: "FF000000" } }
+              },
+              alignment: { horizontal: "center", vertical: "center" }
+            };
+          } else {
+            // Data Row Styling: Subtle Light Borders
+            ws[address].s = {
+              border: {
+                top: { style: "hair", color: { rgb: "FFCCCCCC" } },
+                bottom: { style: "hair", color: { rgb: "FFCCCCCC" } },
+                left: { style: "hair", color: { rgb: "FFCCCCCC" } },
+                right: { style: "hair", color: { rgb: "FFCCCCCC" } }
+              }
+            };
+          }
+        }
+      }
+    }
+
+    // Add margin/table look by auto-sizing columns
+    if (rows.length > 0) {
+      const colWidths = [];
+      const keys = Object.keys(rows[0] || {});
+      keys.forEach(k => {
+        let maxLen = k.length; // header length
+        rows.forEach(r => {
+          if (r[k] && r[k].toString().length > maxLen) {
+            maxLen = r[k].toString().length;
+          }
+        });
+        // add padding so texts don't stick to grid lines
+        colWidths.push({ wch: maxLen + 4 }); 
+      });
+      ws['!cols'] = colWidths;
+    }
+
+    XLSX.utils.book_append_sheet(wb, ws, sheetName);
+  }
+
+  if (format === 'csv') {
+    // CSV doesn't support tabs natively. We'll generate a ZIP file containing multiple CSVs!
+    if (!window.JSZip) {
+      alert("ZIP library is not loaded. Cannot export multiple CSVs.");
+      return;
+    }
+    
+    // Check if we strictly only have one sheet to avoid zipping unnecessarily
+    const sheetEntries = Object.entries(sheets);
+    if (sheetEntries.length === 1) {
+      // Direct CSV download for a single resource
+      const [rt, rows] = sheetEntries[0];
+      const ws = XLSX.utils.json_to_sheet(rows);
+      const csvStr = XLSX.utils.sheet_to_csv(ws);
+      downloadFile(csvStr, `${rt}.csv`, "text/csv");
+      return;
+    }
+
+    const zip = new JSZip();
+    for (const [rt, rows] of sheetEntries) {
+      const ws = XLSX.utils.json_to_sheet(rows);
+      const csvStr = XLSX.utils.sheet_to_csv(ws);
+      zip.file(`${rt}.csv`, csvStr);
+    }
+    
+    zip.generateAsync({ type: "blob" }).then(function(content) {
+      const url = URL.createObjectURL(content);
+      const link = document.createElement("a");
+      link.href = url;
+      // Change filename ending to .zip
+      link.download = filename.replace('.csv', '.zip');
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      URL.revokeObjectURL(url);
+    });
+  } else {
+    try {
+      const wbout = XLSX.write(wb, { bookType: 'xlsx', type: 'array' });
+      const blob = new Blob([wbout], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = filename;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      URL.revokeObjectURL(url);
+    } catch (err) {
+      console.error("Error generating Excel file:", err);
+      // Fallback
+      XLSX.writeFile(wb, filename);
+    }
+  }
+}
 
 // ---------------------------------------------------------------------------
 // UI helpers
