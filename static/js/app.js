@@ -1669,12 +1669,19 @@ function exportDataToSpreadsheet(format, filename) {
     sheets[rt].push(row);
   });
 
+  // Apply PHI restore to field_mappings rows if user has unmasked
+  if (outputIsUnmasked && phiMap && Object.keys(sheets).length > 0) {
+    const restored = JSON.parse(applyPhiRestore(JSON.stringify(sheets)));
+    Object.keys(restored).forEach(k => { sheets[k] = restored[k]; });
+  }
+
   // Fallback for AI conversions: build sheets directly from FHIR bundle entries
   if (Object.keys(sheets).length === 0 && currentResult.fhir_json) {
     try {
-      const bundle = typeof currentResult.fhir_json === 'string'
-        ? JSON.parse(currentResult.fhir_json)
-        : currentResult.fhir_json;
+      const effectiveJson = getEffectiveFhirJson();
+      const bundle = typeof effectiveJson === 'string'
+        ? JSON.parse(effectiveJson)
+        : effectiveJson;
       (bundle.entry || []).forEach(entry => {
         const res = entry.resource;
         if (!res) return;
