@@ -84,6 +84,17 @@ class ORMConverter(BaseConverter):
                     field_mappings=prac_mappings,
                 ))
 
+        # Encounter from PV1
+        encounter, encounter_mappings = self._build_encounter(parsed_msg, patient_id, practitioners)
+        if encounter:
+            resources.append(encounter)
+            if encounter_mappings:
+                field_mappings.append(ResourceMapping(
+                    resource_type="Encounter",
+                    resource_id=encounter["id"],
+                    field_mappings=encounter_mappings,
+                ))
+
         # ServiceRequest(s)
         orc_segments = parsed_msg.get_all_segments("ORC")
         obr_segments = parsed_msg.get_all_segments("OBR")
@@ -92,7 +103,9 @@ class ORMConverter(BaseConverter):
             orc = orc_segments[i] if i < len(orc_segments) else None
             obr = obr_segments[i] if i < len(obr_segments) else None
             sr, sr_mappings = self._build_service_request(
-                orc, obr, patient_id, practitioners, warnings
+                orc, obr, patient_id,
+                encounter["id"] if encounter else None,
+                practitioners, warnings
             )
             resources.append(sr)
             if sr_mappings:
@@ -245,11 +258,110 @@ class ORMConverter(BaseConverter):
         return practitioners, mappings
 
     # ------------------------------------------------------------------
+    def _build_encounter(
+        self, msg: ParsedHL7Message, patient_id: str, practitioners: List[Dict[str, Any]]
+    ) -> Tuple[Dict[str, Any], List[FieldMapping]]:
+        pv1 = msg.get_segment("PV1")
+        if pv1 is None:
+            return None, []
+
+        resource: Dict[str, Any] = {
+            "resourceType": "Encounter",
+            "id": make_id(),
+            "subject": {"reference": f"Patient/{patient_id}"},
+        }
+        mappings: List[FieldMapping] = []
+
+        # PV1-2: Patient class → status
+        patient_class = _field(pv1, 2).upper()
+        class_map = {"I": "inpatient", "O": "outpatient", "E": "emergency",
+                     "P": "preadmission", "R": "recurring", "B": "obstetrics",
+                     "C": "community", "N": "not-applicable", "U": "unknown"}
+        resource["class"] = {"code": class_map.get(patient_class, "unknown")}
+        resource["status"] = "in-progress"
+        if patient_class:
+            mappings.append(FieldMapping(
+                fhir_field="class",
+                hl7_segment="PV1",
+                hl7_field="2",
+                hl7_value=patient_class,
+                description="Patient class (I=inpatient, O=outpatient, E=emergency)",
+            ))
+
+        # PV1-3: Assigned location
+        location_raw = _field(pv1, 3)
+        if location_raw:
+            parts = location_raw.split("^")
+            location_display = " ".join(p for p in parts if p).strip()
+            resource["location"] = [{"location": {"display": location_display}}]
+            mappings.append(FieldMapping(
+                fhir_field="location",
+                hl7_segment="PV1",
+                hl7_field="3",
+                hl7_value=location_raw,
+                description="Assigned patient location (point-of-care^room^bed)",
+            ))
+
+        # PV1-7: Attending doctor
+        attending_raw = _field(pv1, 7)
+        if attending_raw:
+            parts = attending_raw.split("^")
+            npi = parts[0].strip() if parts else ""
+            participant: Dict[str, Any] = {
+                "type": [{"coding": [{"system": "http://terminology.hl7.org/CodeSystem/v3-ParticipationType",
+                                      "code": "ATND", "display": "attender"}]}],
+            }
+            if practitioners:
+                participant["individual"] = {"reference": f"Practitioner/{practitioners[0]['id']}"}
+            elif npi:
+                participant["individual"] = {"display": npi}
+            resource["participant"] = [participant]
+            mappings.append(FieldMapping(
+                fhir_field="participant",
+                hl7_segment="PV1",
+                hl7_field="7",
+                hl7_value=attending_raw,
+                description="Attending doctor (NPI^family^given^middle)",
+            ))
+
+        # PV1-44/45: Admit/discharge date
+        admit_raw = _field(pv1, 44)
+        discharge_raw = _field(pv1, 45)
+        period: Dict[str, Any] = {}
+        if admit_raw:
+            dt = parse_hl7_datetime(admit_raw)
+            if dt:
+                period["start"] = dt
+                mappings.append(FieldMapping(
+                    fhir_field="period.start",
+                    hl7_segment="PV1",
+                    hl7_field="44",
+                    hl7_value=admit_raw,
+                    description="Admit date/time",
+                ))
+        if discharge_raw:
+            dt = parse_hl7_datetime(discharge_raw)
+            if dt:
+                period["end"] = dt
+                mappings.append(FieldMapping(
+                    fhir_field="period.end",
+                    hl7_segment="PV1",
+                    hl7_field="45",
+                    hl7_value=discharge_raw,
+                    description="Discharge date/time",
+                ))
+        if period:
+            resource["period"] = period
+
+        return resource, mappings
+
+    # ------------------------------------------------------------------
     def _build_service_request(
         self,
         orc,
         obr,
         patient_id: str,
+        encounter_id: str,
         practitioners: List[Dict[str, Any]],
         warnings: list,
     ) -> Tuple[Dict[str, Any], List[FieldMapping]]:
@@ -258,6 +370,8 @@ class ORMConverter(BaseConverter):
             "id": make_id(),
             "subject": {"reference": f"Patient/{patient_id}"},
         }
+        if encounter_id:
+            resource["encounter"] = {"reference": f"Encounter/{encounter_id}"}
         mappings: List[FieldMapping] = []
 
         # Status and intent from ORC-1
@@ -286,23 +400,33 @@ class ORMConverter(BaseConverter):
         if orc:
             placer = _field(orc, 2)
             filler = _field(orc, 3)
+            group  = _field(orc, 4)
             if placer:
-                identifiers.append({"type": {"coding": [{"code": "PLAC"}]}, "value": placer})
+                identifiers.append({"type": {"coding": [{"system": "http://terminology.hl7.org/CodeSystem/v2-0203", "code": "PLAC", "display": "Placer Identifier"}]}, "value": placer})
                 mappings.append(FieldMapping(
                     fhir_field="identifier",
                     hl7_segment="ORC",
                     hl7_field="2",
                     hl7_value=placer,
-                    description="Order placer number",
+                    description="Order placer number (ORC-2)",
                 ))
             if filler:
-                identifiers.append({"type": {"coding": [{"code": "FILL"}]}, "value": filler})
+                identifiers.append({"type": {"coding": [{"system": "http://terminology.hl7.org/CodeSystem/v2-0203", "code": "FILL", "display": "Filler Identifier"}]}, "value": filler})
                 mappings.append(FieldMapping(
                     fhir_field="identifier",
                     hl7_segment="ORC",
                     hl7_field="3",
                     hl7_value=filler,
-                    description="Order filler number",
+                    description="Order filler number (ORC-3)",
+                ))
+            if group:
+                identifiers.append({"type": {"coding": [{"system": "http://terminology.hl7.org/CodeSystem/v2-0203", "code": "PGN", "display": "Placer Group Number"}]}, "value": group})
+                mappings.append(FieldMapping(
+                    fhir_field="identifier",
+                    hl7_segment="ORC",
+                    hl7_field="4",
+                    hl7_value=group,
+                    description="Placer group number (ORC-4)",
                 ))
         if obr:
             obr_placer = _field(obr, 2)

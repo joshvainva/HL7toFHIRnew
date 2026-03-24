@@ -15,8 +15,11 @@ from typing import Any, Dict, List, Optional
 
 logger = logging.getLogger(__name__)
 
-# ── Groq client (lazy init so server starts even without the key) ──
+# ── Groq client (lazy init) ──
 _client = None
+
+# ── Anthropic/Claude client (lazy init) ──
+_claude_client = None
 
 
 def _get_client():
@@ -25,14 +28,46 @@ def _get_client():
         try:
             from groq import Groq
         except ImportError:
-            raise RuntimeError(
-                "groq package not installed. Run: pip install groq"
-            )
+            raise RuntimeError("groq package not installed. Run: pip install groq")
         api_key = os.getenv("GROQ_API_KEY", "")
         if not api_key:
             raise RuntimeError("GROQ_API_KEY is not set in environment / .env file.")
         _client = Groq(api_key=api_key)
     return _client
+
+
+def _get_claude_client():
+    global _claude_client
+    if _claude_client is None:
+        try:
+            import anthropic
+        except ImportError:
+            raise RuntimeError("anthropic package not installed. Run: pip install anthropic")
+        api_key = os.getenv("ANTHROPIC_API_KEY", "")
+        if not api_key:
+            raise RuntimeError("ANTHROPIC_API_KEY is not set in environment / .env file.")
+        _claude_client = anthropic.Anthropic(api_key=api_key)
+    return _claude_client
+
+
+def _claude_call(system: str, user: str, max_tokens: int = 8192) -> str:
+    """Single Claude API call, returns raw text."""
+    client = _get_claude_client()
+    try:
+        msg = client.messages.create(
+            model="claude-sonnet-4-6",
+            max_tokens=max_tokens,
+            system=system,
+            messages=[{"role": "user", "content": user}],
+        )
+        return msg.content[0].text
+    except Exception as exc:
+        msg_str = str(exc)
+        if "rate_limit" in msg_str.lower() or "429" in msg_str:
+            raise RuntimeError(f"Claude rate limit hit. Please wait and try again.") from exc
+        if "credit" in msg_str.lower() or "quota" in msg_str.lower():
+            raise RuntimeError("Claude API quota exceeded. Check your Anthropic billing.") from exc
+        raise
 
 
 # ─────────────────────────────────────────────────────────────────────
@@ -47,7 +82,7 @@ Return a compact JSON array of FHIR resources (no markdown, no extra text):
 
 Create these resources from the message:
 - PID -> Patient (id, identifier, name, birthDate, gender, address, telecom, communication, maritalStatus)
-- PV1 -> Encounter (id, status, class, period, location, participant)
+- PV1 -> Encounter REQUIRED: id, status (default in-progress), class from PV1-2 (I=inpatient O=outpatient E=emergency), location from PV1-3 (point-of-care^room^bed), participant (attending from PV1-7 NPI^family^given), period.start from PV1-44, period.end from PV1-45
 - MSH-4 -> Organization (id, name)
 - PV1-7/8/9 -> Practitioner resources (id, identifier with NPI, name)
 - NK1 -> RelatedPerson (id, name, relationship, address, telecom)
@@ -61,14 +96,21 @@ Dates YYYYMMDD->YYYY-MM-DD. Gender M=male F=female. Compact JSON no indentation.
 _HL7_CLINICAL_SYSTEM = """You are an HL7 to FHIR R4 converter. Extract ONLY clinical resources.
 
 Return a compact JSON array of FHIR resources (no markdown, no extra text):
-[{"resourceType":"DiagnosticReport","id":"..."},{"resourceType":"Observation","id":"..."},...]
+[{"resourceType":"ServiceRequest","id":"..."},{"resourceType":"DiagnosticReport","id":"..."},...]
 
-Create these resources:
-- ORC -> ServiceRequest (id, identifier, status, code, authoredOn, requester)
-- Each OBR group -> ONE DiagnosticReport (id, status, code, effectiveDateTime, identifier)
-  + ONE Observation per OBX under that OBR (id, status, code, value[x], unit, referenceRange, interpretation)
-  + NTE after OBR -> note on DiagnosticReport
-- RXA+RXR -> Immunization (id, vaccineCode, occurrenceDateTime, doseQuantity, route, site, performer)
+CRITICAL — map ALL of these when present:
+- ORC -> ServiceRequest REQUIRED fields:
+    id (unique), status (from ORC-1: NW=active, CA/DC=revoked, HD=on-hold),
+    intent (from ORC-1: NW=order),
+    identifier: [{type:{coding:[{code:"PLAC"}]},value:ORC-2}, {type:{coding:[{code:"FILL"}]},value:ORC-3}, {type:{coding:[{code:"PGN"}]},value:ORC-4}],
+    authoredOn (ORC-9 datetime), requester (ORC-12 NPI as Practitioner ref)
+- OBR (with ORC) -> add to the same ServiceRequest: code from OBR-4 (LOINC), priority from OBR-5
+- OBR (ORU message) -> ONE DiagnosticReport per OBR group + ONE Observation per OBX
+- NTE after OBR -> note on DiagnosticReport
+- RXA+RXR -> Immunization (vaccineCode, occurrenceDateTime, doseQuantity, route, site, performer)
+
+IMPORTANT: For ORM messages (order messages with ORC+OBR but NO OBX), produce a ServiceRequest only — do NOT produce DiagnosticReport.
+For ORU messages (result messages with OBX), produce DiagnosticReport + Observation resources.
 
 OBX value types: NM->valueQuantity, CWE/CE->valueCodeableConcept, ST/TX->valueString, ED->valueAttachment.
 OBX-8 interpretation: H=high L=low N=normal A=abnormal.
@@ -394,6 +436,14 @@ def _build_xml_from_bundle(bundle: dict) -> str:
         return "<Bundle><note>XML rendering unavailable</note></Bundle>"
 
 
+def _llm_call(system: str, user: str, max_tokens: int = 8192, provider: str = "groq") -> str:
+    """Unified LLM call — routes to Groq or Claude based on provider."""
+    if provider == "claude":
+        return _claude_call(system, user, max_tokens)
+    client = _get_client()
+    return _groq_call(client, system, user, max_tokens)
+
+
 def _groq_call(client, system: str, user: str, max_tokens: int = 8192) -> str:
     """Single Groq API call, returns raw text."""
     try:
@@ -427,31 +477,67 @@ def _groq_call(client, system: str, user: str, max_tokens: int = 8192) -> str:
         raise
 
 
+def _unwrap_to_list(obj) -> list:
+    """If obj is a Bundle dict, unwrap entries; otherwise return as-is."""
+    if isinstance(obj, list):
+        return obj
+    if isinstance(obj, dict):
+        # Bundle with entry array
+        entries = obj.get("entry", [])
+        if entries:
+            return [e.get("resource", e) if isinstance(e, dict) else e for e in entries]
+        # Single resource wrapped in dict
+        if obj.get("resourceType"):
+            return [obj]
+    return []
+
+
 def _parse_resource_array(raw: str) -> list:
     """Parse a JSON array of FHIR resources from LLM response."""
+    try:
+        from json_repair import repair_json
+        _has_json_repair = True
+    except ImportError:
+        _has_json_repair = False
+
+    # Strip markdown code fences
     raw = re.sub(r"^```[a-z]*\s*", "", raw.strip(), flags=re.MULTILINE)
     raw = re.sub(r"```\s*$", "", raw.strip(), flags=re.MULTILINE)
     raw = raw.strip()
-    # Try direct parse
+
+    # Try direct parse first (fastest path)
     try:
         result = json.loads(raw)
-        return result if isinstance(result, list) else []
+        unwrapped = _unwrap_to_list(result)
+        if unwrapped:
+            return unwrapped
     except json.JSONDecodeError:
         pass
-    # Try repaired
-    try:
-        result = json.loads(_repair_truncated_json(raw))
-        return result if isinstance(result, list) else []
-    except Exception:
-        pass
-    # Try to find [...] block
-    match = re.search(r'\[.*\]', raw, re.DOTALL)
-    if match:
+
+    # Try json_repair (handles mid-array corruption from LLM output)
+    if _has_json_repair:
         try:
-            result = json.loads(_repair_truncated_json(match.group()))
-            return result if isinstance(result, list) else []
+            result = json.loads(repair_json(raw))
+            unwrapped = _unwrap_to_list(result)
+            if unwrapped:
+                return unwrapped
         except Exception:
             pass
+
+    # Fallback: custom truncation repair
+    for candidate in (raw, re.search(r'\[.*\]', raw, re.DOTALL),
+                      re.search(r'\{.*\}', raw, re.DOTALL)):
+        text = candidate if isinstance(candidate, str) else (candidate.group() if candidate else None)
+        if not text:
+            continue
+        try:
+            result = json.loads(_repair_truncated_json(text))
+            unwrapped = _unwrap_to_list(result)
+            if unwrapped:
+                return unwrapped
+        except Exception:
+            pass
+
     return []
 
 
@@ -469,16 +555,11 @@ def _extract_msh_info(hl7_message: str) -> dict:
     return {"hl7_version": "2.5", "message_type": "", "message_event": ""}
 
 
-def convert_hl7_to_fhir_via_llm(hl7_message: str) -> dict:
+def convert_hl7_to_fhir_via_llm(hl7_message: str, provider: str = "groq") -> dict:
     """
-    Four-step conversion to handle large complex messages:
-    Step 1 — Demographics (Patient, Encounter, Organization, Practitioner, RelatedPerson)
-    Step 2 — Clinical (DiagnosticReport, Observation, ServiceRequest, Immunization)
-    Step 3 — Admin (AllergyIntolerance, Condition, Coverage, Z-segments)
-    Step 4 — Field Mappings
-    All resource arrays are merged into one Bundle.
+    Four-step conversion to handle large complex messages.
+    provider: "groq" (default) or "claude"
     """
-    client = _get_client()
     all_entries: list = []
     warnings: list = []
 
@@ -487,9 +568,9 @@ def convert_hl7_to_fhir_via_llm(hl7_message: str) -> dict:
 
     # ── Step 1: Demographics ─────────────────────────────────────────
     try:
-        raw1 = _groq_call(client, _HL7_DEMOGRAPHICS_SYSTEM,
-                          "Extract demographic FHIR resources from:\n\n" + hl7_message,
-                          max_tokens=4096)
+        raw1 = _llm_call(_HL7_DEMOGRAPHICS_SYSTEM,
+                         "Extract demographic FHIR resources from:\n\n" + hl7_message,
+                         max_tokens=4096, provider=provider)
         resources1 = _parse_resource_array(raw1)
         all_entries.extend({"resource": r} for r in resources1 if isinstance(r, dict))
     except Exception as exc:
@@ -498,9 +579,9 @@ def convert_hl7_to_fhir_via_llm(hl7_message: str) -> dict:
 
     # ── Step 2: Clinical ─────────────────────────────────────────────
     try:
-        raw2 = _groq_call(client, _HL7_CLINICAL_SYSTEM,
-                          "Extract clinical FHIR resources from:\n\n" + hl7_message,
-                          max_tokens=6000)
+        raw2 = _llm_call(_HL7_CLINICAL_SYSTEM,
+                         "Extract clinical FHIR resources from:\n\n" + hl7_message,
+                         max_tokens=6000, provider=provider)
         resources2 = _parse_resource_array(raw2)
         all_entries.extend({"resource": r} for r in resources2 if isinstance(r, dict))
     except Exception as exc:
@@ -509,9 +590,9 @@ def convert_hl7_to_fhir_via_llm(hl7_message: str) -> dict:
 
     # ── Step 3: Admin / Coverage ─────────────────────────────────────
     try:
-        raw3 = _groq_call(client, _HL7_ADMIN_SYSTEM,
-                          "Extract admin FHIR resources from:\n\n" + hl7_message,
-                          max_tokens=3000)
+        raw3 = _llm_call(_HL7_ADMIN_SYSTEM,
+                         "Extract admin FHIR resources from:\n\n" + hl7_message,
+                         max_tokens=3000, provider=provider)
         resources3 = _parse_resource_array(raw3)
         all_entries.extend({"resource": r} for r in resources3 if isinstance(r, dict))
     except Exception as exc:
@@ -533,11 +614,11 @@ def convert_hl7_to_fhir_via_llm(hl7_message: str) -> dict:
     id_summary = ", ".join(
         f"{e['resource'].get('resourceType')}:{e['resource'].get('id','?')}"
         for e in all_entries if "resource" in e
-    )[:800]  # cap length
+    )[:800]
     try:
-        raw4 = _groq_call(client, _HL7_TO_FHIR_MAPPINGS_SYSTEM,
-                          f"HL7:\n{hl7_message[:3000]}\n\nResources: {id_summary}\n\nReturn field mappings array.",
-                          max_tokens=4096)
+        raw4 = _llm_call(_HL7_TO_FHIR_MAPPINGS_SYSTEM,
+                         f"HL7:\n{hl7_message[:3000]}\n\nResources: {id_summary}\n\nReturn field mappings array.",
+                         max_tokens=4096, provider=provider)
         fm = _extract_json(raw4)
         if isinstance(fm, list):
             data["field_mappings"] = fm
@@ -562,27 +643,21 @@ def convert_hl7_to_fhir_via_llm(hl7_message: str) -> dict:
     return data
 
 
-def convert_fhir_to_hl7_via_llm(fhir_bundle: dict) -> dict:
-    """Send a FHIR bundle to Groq and return a dict matching ConversionResult schema."""
-    client = _get_client()
-
+def convert_fhir_to_hl7_via_llm(fhir_bundle: dict, provider: str = "groq") -> dict:
+    """Convert FHIR bundle to HL7 via LLM. provider: 'groq' or 'claude'."""
     try:
-        completion = client.chat.completions.create(
-            model="llama-3.3-70b-versatile",
-            messages=[
-                {"role": "system", "content": _FHIR_TO_HL7_SYSTEM},
-                {"role": "user", "content": "Convert this FHIR Bundle:\n\n" + json.dumps(fhir_bundle, indent=2)},
-            ],
-            temperature=0.1,
+        raw = _llm_call(
+            _FHIR_TO_HL7_SYSTEM,
+            "Convert this FHIR Bundle:\n\n" + json.dumps(fhir_bundle, indent=2),
             max_tokens=8192,
+            provider=provider,
         )
-        raw = completion.choices[0].message.content
     except Exception as exc:
-        logger.exception("Groq API call failed")
+        logger.exception("LLM API call failed")
         return {
             "success": False,
             "direction": "fhir_to_hl7",
-            "errors": [f"Groq API error: {exc}"],
+            "errors": [f"LLM API error: {exc}"],
             "warnings": [],
         }
 
@@ -604,21 +679,20 @@ def convert_fhir_to_hl7_via_llm(fhir_bundle: dict) -> dict:
     return data
 
 
-def convert_ehr_to_fhir_via_llm(ehr_data: str) -> dict:
+def convert_ehr_to_fhir_via_llm(ehr_data: str, provider: str = "groq") -> dict:
     """
-    Convert raw EHR data (any format) directly to FHIR R4 Bundle.
-    Step 1 — Extract all FHIR resources from raw EHR text.
-    Step 2 — Generate field mappings (EHR field → FHIR path).
+    Convert raw EHR data to FHIR R4 Bundle.
+    provider: "groq" (default) or "claude"
     """
-    client = _get_client()
     warnings: list = []
 
     # ── Step 1: All FHIR resources from EHR data ─────────────────────
     try:
-        raw1 = _groq_call(
-            client, _EHR_TO_FHIR_SYSTEM,
+        raw1 = _llm_call(
+            _EHR_TO_FHIR_SYSTEM,
             "Convert this raw EHR data to FHIR R4 resources:\n\n" + ehr_data,
             max_tokens=6000,
+            provider=provider,
         )
         resources = _parse_resource_array(raw1)
     except Exception as exc:
@@ -656,10 +730,11 @@ def convert_ehr_to_fhir_via_llm(ehr_data: str) -> dict:
         for e in all_entries if "resource" in e
     )[:600]
     try:
-        raw2 = _groq_call(
-            client, _EHR_TO_FHIR_MAPPINGS_SYSTEM,
+        raw2 = _llm_call(
+            _EHR_TO_FHIR_MAPPINGS_SYSTEM,
             f"EHR Data:\n{ehr_data[:2500]}\n\nFHIR Resources: {id_summary}\n\nReturn field mappings.",
             max_tokens=4096,
+            provider=provider,
         )
         fm = _extract_json(raw2)
         if isinstance(fm, list):

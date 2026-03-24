@@ -32,6 +32,16 @@
         <button class="dir-btn ehr-dir-btn" id="btn-ehr-to-fhir" onclick="setDirection('ehr_to_fhir')">⚕ EHR → FHIR</button>
       </div>
 
+      <!-- Dark Mode Toggle -->
+      <button class="dark-toggle-btn" id="dark-toggle-btn" onclick="toggleDarkMode()" title="Toggle dark/light mode">
+        <span id="dark-toggle-icon">🌙</span>
+      </button>
+
+      <!-- Tour Button -->
+      <button class="tour-btn" id="tour-btn" onclick="startTour()">
+        <span class="tour-btn-icon">ⓘ</span> Tour
+      </button>
+
       <!-- AI Mode Toggle -->
       <div class="ai-toggle-wrap" id="ai-toggle-wrap">
         <label class="ai-toggle-label" for="ai-toggle-checkbox">
@@ -42,7 +52,6 @@
           <input type="checkbox" id="ai-toggle-checkbox" class="hidden" onchange="toggleAIMode()" style="display:none" />
           <span class="ai-toggle-knob" id="ai-toggle-knob"></span>
         </label>
-        <span class="ai-mode-badge hidden" id="ai-mode-badge">Groq</span>
       </div>
     </div>
   </header>
@@ -214,17 +223,30 @@
         <div class="tab-content" id="tab-mapping">
           <div class="mapping-content">
             <h3>FHIR Conversion Mapping Rules</h3>
-            <p class="mapping-intro">This tool converts HL7 v2.x messages to FHIR R4 resources. All major EHR vendors are supported (Epic, Cerner, Meditech, Allscripts, athenahealth, eClinicalWorks, NextGen).</p>
+            <p class="mapping-intro">Full-stack healthcare interoperability tool — converts HL7 v2.x messages and raw EHR pipe-delimited records to FHIR R4 using both rule-based and AI-powered engines. Supports Epic, Cerner, Meditech, Allscripts, athenahealth, eClinicalWorks, NextGen and any custom HL7 variant.</p>
+
+            <!-- ===== CONVERSION MODES ===== -->
+            <div class="mapping-section">
+              <h4>Conversion Modes</h4>
+              <table class="mapping-table">
+                <thead><tr><th>Mode</th><th>Description</th><th>Engines Available</th></tr></thead>
+                <tbody>
+                  <tr><td>HL7 → FHIR</td><td>Convert HL7 v2.x messages (ADT, ORM, ORU, SIU, MDM, DFT, VXU, MFN, BAR, ACK) to FHIR R4 Bundle</td><td>Rule-based · AI (Claude / Groq)</td></tr>
+                  <tr><td>FHIR → HL7</td><td>Convert FHIR R4 Bundle back to HL7 v2.x message</td><td>Rule-based</td></tr>
+                  <tr><td>EHR → FHIR</td><td>Convert raw EHR pipe-delimited records (PATIENT, ENCOUNTER, DIAGNOSIS, LAB…) to FHIR R4</td><td>Rule-based · AI (Claude / Groq)</td></tr>
+                </tbody>
+              </table>
+            </div>
 
             <!-- ===== SUPPORTED MESSAGE TYPES ===== -->
             <div class="mapping-section">
-              <h4>Supported Message Types</h4>
+              <h4>Supported HL7 Message Types</h4>
               <table class="mapping-table">
                 <thead><tr><th>HL7 Type</th><th>Event(s)</th><th>FHIR Resources Produced</th></tr></thead>
                 <tbody>
-                  <tr><td>ADT</td><td>A01–A62</td><td>Patient, Encounter, Organization, Practitioner</td></tr>
-                  <tr><td>ORU</td><td>R01</td><td>Patient, DiagnosticReport, Observation, Organization, Practitioner</td></tr>
-                  <tr><td>ORM</td><td>O01</td><td>Patient, ServiceRequest, Practitioner</td></tr>
+                  <tr><td>ADT</td><td>A01–A62</td><td>Patient, Encounter, Organization, Practitioner, RelatedPerson, AllergyIntolerance, Condition, Coverage</td></tr>
+                  <tr><td>ORU</td><td>R01</td><td>Patient, Encounter, DiagnosticReport, Observation, Organization, Practitioner, ServiceRequest</td></tr>
+                  <tr><td>ORM</td><td>O01</td><td>Patient, <strong>Encounter</strong> (from PV1), ServiceRequest (ORC+OBR with placer/filler/group IDs), Practitioner</td></tr>
                   <tr><td>SIU</td><td>S12–S26</td><td>Patient, Appointment, Encounter, Organization</td></tr>
                   <tr><td>MDM</td><td>T01–T11</td><td>Patient, DocumentReference, Organization, Practitioner</td></tr>
                   <tr><td>DFT</td><td>P03</td><td>Patient, Claim, ChargeItem, Organization</td></tr>
@@ -343,18 +365,36 @@
             <div class="mapping-section">
               <h4>ORM — Order Message</h4>
               <div class="mapping-subsection">
+                <h5>Encounter Resource (PV1 segment)</h5>
+                <table class="mapping-table">
+                  <thead><tr><th>FHIR Field</th><th>HL7 Segment.Field</th><th>Description / Notes</th></tr></thead>
+                  <tbody>
+                    <tr><td>class</td><td>PV1-2</td><td>I=inpatient, O=outpatient, E=emergency, P=preadmission</td></tr>
+                    <tr><td>location</td><td>PV1-3</td><td>Point-of-care^room^bed — e.g. CLINIC^101^A</td></tr>
+                    <tr><td>participant (attending)</td><td>PV1-7</td><td>Attending doctor NPI^family^given; role=ATND</td></tr>
+                    <tr><td>period.start</td><td>PV1-44</td><td>Admit date/time</td></tr>
+                    <tr><td>period.end</td><td>PV1-45</td><td>Discharge date/time</td></tr>
+                    <tr><td>status</td><td>Derived</td><td>Default: in-progress</td></tr>
+                  </tbody>
+                </table>
+              </div>
+              <div class="mapping-subsection">
                 <h5>ServiceRequest Resource (ORC + OBR segments)</h5>
                 <table class="mapping-table">
                   <thead><tr><th>FHIR Field</th><th>HL7 Segment.Field</th><th>Description / Notes</th></tr></thead>
                   <tbody>
-                    <tr><td>status</td><td>ORC-1</td><td>NW=active, CA=revoked, DC=stopped, HD=on-hold, RP=draft</td></tr>
-                    <tr><td>intent</td><td>ORC-1</td><td>NW=order, RP=reflex-order, RO=reflex-order</td></tr>
-                    <tr><td>identifier (placer)</td><td>ORC-2</td><td>Placer order number</td></tr>
-                    <tr><td>identifier (filler)</td><td>ORC-3</td><td>Filler order number</td></tr>
-                    <tr><td>code</td><td>OBR-4</td><td>Ordered test/procedure code</td></tr>
+                    <tr><td>status</td><td>ORC-1</td><td>NW=active, CA/DC=revoked, HD=on-hold, XO/OK=active</td></tr>
+                    <tr><td>intent</td><td>ORC-1</td><td>NW=order, RE/RO=reflex-order, SN=proposal</td></tr>
+                    <tr><td>identifier (PLAC)</td><td>ORC-2</td><td>Placer order number</td></tr>
+                    <tr><td>identifier (FILL)</td><td>ORC-3</td><td>Filler order number</td></tr>
+                    <tr><td>identifier (PGN)</td><td>ORC-4</td><td>Placer group number</td></tr>
+                    <tr><td>code</td><td>OBR-4</td><td>Ordered test/procedure LOINC code</td></tr>
+                    <tr><td>priority</td><td>OBR-5</td><td>S=stat, A=asap, R=routine, P=urgent</td></tr>
                     <tr><td>authoredOn</td><td>ORC-9</td><td>Transaction date/time</td></tr>
-                    <tr><td>requester</td><td>ORC-12</td><td>Ordering provider XCN</td></tr>
-                    <tr><td>reasonCode</td><td>DG1-3</td><td>Order reason / diagnosis</td></tr>
+                    <tr><td>requester</td><td>ORC-12</td><td>Ordering provider XCN (NPI^family^given)</td></tr>
+                    <tr><td>encounter</td><td>PV1</td><td>Reference to the Encounter resource built from PV1</td></tr>
+                    <tr><td>reasonCode</td><td>OBR-13</td><td>Clinical reason for order</td></tr>
+                    <tr><td>specimen</td><td>OBR-15</td><td>Specimen description</td></tr>
                     <tr><td>note</td><td>NTE-3</td><td>Order comments</td></tr>
                   </tbody>
                 </table>
@@ -552,6 +592,79 @@
               </table>
             </div>
 
+            <!-- ===== EHR PIPE-DELIMITED ===== -->
+            <div class="mapping-section">
+              <h4>EHR Pipe-Delimited → FHIR R4 (EHR Mode)</h4>
+              <p class="mapping-intro">Raw EHR records in pipe-delimited format are supported in the <strong>EHR → FHIR</strong> mode. Each record type maps to one or more FHIR resources.</p>
+              <table class="mapping-table">
+                <thead><tr><th>EHR Record Type</th><th>Column Order</th><th>FHIR Resource</th></tr></thead>
+                <tbody>
+                  <tr><td>PATIENT</td><td>MRN | FirstName | LastName | DOB | Gender | Language | Phone | Address | City | State | Zip</td><td>Patient</td></tr>
+                  <tr><td>ENCOUNTER</td><td>VisitID | VisitType | Location | ProviderID | ProviderName | StartTime | EndTime</td><td>Encounter</td></tr>
+                  <tr><td>ALLERGY</td><td>SeqNum | Substance | Reaction | OnsetDate</td><td>AllergyIntolerance</td></tr>
+                  <tr><td>DIAGNOSIS</td><td>SeqNum | ICD Code | Description</td><td>Condition</td></tr>
+                  <tr><td>LAB_ORDER</td><td>OrderID | PanelName | OrderedTime</td><td>ServiceRequest</td></tr>
+                  <tr><td>LAB_RESULT</td><td>SeqNum | LOINCCode | TestName | Value | Unit | ReferenceRange | Flag</td><td>Observation</td></tr>
+                  <tr><td>VITAL</td><td>Type | Value | Unit</td><td>Observation</td></tr>
+                  <tr><td>IMMUNIZATION</td><td>Vaccine | Date | Dose | Unit | Route | Site</td><td>Immunization</td></tr>
+                  <tr><td>INSURANCE</td><td>PlanName | PlanType | GroupNum | MemberID</td><td>Coverage</td></tr>
+                </tbody>
+              </table>
+            </div>
+
+            <!-- ===== AI ENGINE ===== -->
+            <div class="mapping-section">
+              <h4>AI-Powered Conversion Engine</h4>
+              <p class="mapping-intro">Enable <strong>AI Mode</strong> to use LLM-based conversion for complex, non-standard, or unknown HL7 variants that rule-based parsers cannot handle.</p>
+              <table class="mapping-table">
+                <thead><tr><th>Feature</th><th>Detail</th></tr></thead>
+                <tbody>
+                  <tr><td>AI Providers</td><td><strong>Claude Sonnet 4.6</strong> (Anthropic) · <strong>Groq Llama 3.3 70B</strong> — selectable via radio button in the convert bar</td></tr>
+                  <tr><td>4-Step Pipeline</td><td>Step 1: Demographics (PID→Patient, PV1→Encounter) · Step 2: Clinical (ORC→ServiceRequest, OBR→DiagnosticReport, OBX→Observation) · Step 3: Admin (AL1, DG1, IN1) · Step 4: Field Mappings</td></tr>
+                  <tr><td>JSON Repair</td><td>Malformed LLM JSON automatically repaired via <code>json-repair</code> library before parsing</td></tr>
+                  <tr><td>Rate Limits</td><td>Groq free tier: 100,000 tokens/day. Switch to Claude if Groq limit is reached</td></tr>
+                  <tr><td>PHI Masking</td><td>Check <strong>🔒 Mask PHI</strong> before converting to redact patient data before sending to AI — see below</td></tr>
+                </tbody>
+              </table>
+            </div>
+
+            <!-- ===== PHI MASKING ===== -->
+            <div class="mapping-section">
+              <h4>PHI Masking &amp; Unmask</h4>
+              <p class="mapping-intro">When <strong>🔒 Mask PHI</strong> is checked, the following fields are replaced with placeholders before the message is sent to the AI provider. Original values are stored locally in the browser and can be restored with <strong>🔓 Unmask</strong>.</p>
+              <table class="mapping-table">
+                <thead><tr><th>Field</th><th>HL7 Location</th><th>Masked Value</th></tr></thead>
+                <tbody>
+                  <tr><td>Patient Name</td><td>PID-5</td><td>PATIENT^MASKED</td></tr>
+                  <tr><td>MRN</td><td>PID-3</td><td>[MRN_MASKED]</td></tr>
+                  <tr><td>Date of Birth</td><td>PID-7</td><td>19000101</td></tr>
+                  <tr><td>SSN</td><td>PID-19</td><td>[SSN_MASKED]</td></tr>
+                  <tr><td>Address</td><td>PID-11</td><td>123 MASKED ST^^CITY^ST^00000</td></tr>
+                  <tr><td>Phone</td><td>PID-13</td><td>(000)000-0000</td></tr>
+                  <tr><td>Next-of-Kin Name</td><td>NK1-2</td><td>NOK^MASKED</td></tr>
+                  <tr><td>Next-of-Kin Phone</td><td>NK1-5</td><td>(000)000-0000</td></tr>
+                  <tr><td>Next-of-Kin Address</td><td>NK1-4</td><td>123 MASKED ST^^CITY^ST^00000</td></tr>
+                  <tr><td>EHR Patient Fields</td><td>PATIENT row fields 1–4, 7–9</td><td>MRN_MASKED / MASKED / 1900-01-01 / …</td></tr>
+                </tbody>
+              </table>
+              <p class="mapping-intro" style="margin-top:0.5rem">Downloads (JSON, PDF, CSV, Excel) use the <em>current display state</em> — masked when Mask PHI is on, restored when 🔓 Unmask is active.</p>
+            </div>
+
+            <!-- ===== OUTPUT & DOWNLOADS ===== -->
+            <div class="mapping-section">
+              <h4>Output Formats &amp; Downloads</h4>
+              <table class="mapping-table">
+                <thead><tr><th>Format</th><th>Description</th><th>Filename Pattern</th></tr></thead>
+                <tbody>
+                  <tr><td>FHIR JSON</td><td>Full FHIR R4 Bundle — copy or download</td><td><code>Patient_LASTNAME_FIRSTNAME.json</code> (single) · <code>FHIR_Bundle_ORM.json</code> (multi)</td></tr>
+                  <tr><td>FHIR XML</td><td>FHIR R4 Bundle in XML format</td><td><code>FHIR_Export_&lt;type&gt;.xml</code></td></tr>
+                  <tr><td>PDF Report</td><td>Branded report with resource summary, per-resource detail, and field mapping audit trail</td><td><code>FHIR_Report_&lt;type&gt;_&lt;date&gt;.pdf</code></td></tr>
+                  <tr><td>CSV</td><td>Flat tabular view, one row per resource</td><td><code>FHIR_Export_&lt;type&gt;.csv</code></td></tr>
+                  <tr><td>Excel</td><td>Multi-sheet workbook — one sheet per resource type</td><td><code>FHIR_Export_&lt;type&gt;.xlsx</code></td></tr>
+                </tbody>
+              </table>
+            </div>
+
             <!-- ===== FIELD PARSING ===== -->
             <div class="mapping-section">
               <h4>HL7 Field Parsing Rules</h4>
@@ -576,6 +689,22 @@
         </div>
 
         <div class="convert-bar">
+          <!-- AI Provider selector (shown only in AI mode) -->
+          <div class="ai-provider-group hidden" id="ai-provider-group">
+            <label class="ai-provider-opt">
+              <input type="radio" name="ai-provider" value="groq" checked onchange="updateAIProviderBadge()" />
+              <span class="ai-provider-label groq-label">⚡ Groq</span>
+            </label>
+            <label class="ai-provider-opt">
+              <input type="radio" name="ai-provider" value="claude" onchange="updateAIProviderBadge()" />
+              <span class="ai-provider-label claude-label">✦ Claude</span>
+            </label>
+          </div>
+          <!-- Mask PHI (shown only in AI mode) -->
+          <label class="mask-phi-label hidden" id="mask-phi-label" title="Replace patient name, DOB, and MRN with placeholders before sending to AI">
+            <input type="checkbox" id="mask-phi-checkbox" style="accent-color:var(--accent);" />
+            <span class="mask-phi-text">🔒 Mask PHI</span>
+          </label>
           <button class="btn btn-primary" id="convert-btn">
             <span class="btn-icon" id="convert-btn-icon">⚡</span>
             <span id="convert-btn-label">Convert to FHIR</span>
@@ -585,7 +714,7 @@
             <span id="spinner-label">Converting…</span>
           </div>
           <div class="ai-active-banner hidden" id="ai-active-banner">
-            ✨ <strong>AI Mode ON</strong> — Powered by <span class="gemini-brand">Groq AI (Llama 3.3)</span>
+            ✨ <strong>AI Mode ON</strong> — Powered by <span id="ai-mode-badge" class="gemini-brand">Groq AI (Llama 3.3)</span>
           </div>
         </div>
       </section>
@@ -612,11 +741,12 @@
           <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:0.5rem;">
             <h2 class="panel-title">Output <span class="ai-output-badge hidden" id="ai-output-badge">✨ AI Generated</span></h2>
             <!-- Persistent download toolbar — visible on all tabs -->
-            <div class="toolbar-actions" id="persistent-download-toolbar" style="display:flex; gap:0.5rem;">
+            <div class="toolbar-actions" id="persistent-download-toolbar" style="display:flex; gap:0.5rem; align-items:center; flex-wrap:wrap;">
+              <button class="tool-btn hidden" id="unmask-btn" onclick="toggleUnmask()" title="Restore original patient data in the output">🔓 Unmask</button>
               <button class="tool-btn" onclick="copyOutput('json')">📋 Copy</button>
-              <button class="tool-btn" onclick="downloadOutput('json', 'fhir_bundle_'+getTs()+'.json', 'application/json')">⬇ JSON</button>
-              <button class="tool-btn" onclick="downloadOutput('csv', 'fhir_export_'+getTs()+'.zip', 'text/csv')">⬇ CSV</button>
-              <button class="tool-btn" onclick="downloadOutput('xlsx', 'fhir_export_'+getTs()+'.xlsx', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')">⬇ Excel</button>
+              <button class="tool-btn" onclick="downloadOutput('json', getPatientBasename()+'_'+getTs()+'.json', 'application/json')">⬇ JSON</button>
+              <button class="tool-btn" onclick="downloadOutput('csv', getPatientBasename()+'_'+getTs()+'.zip', 'text/csv')">⬇ CSV</button>
+              <button class="tool-btn" onclick="downloadOutput('xlsx', getPatientBasename()+'_'+getTs()+'.xlsx', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')">⬇ Excel</button>
             </div>
           </div>
           <div class="output-tabs">

@@ -323,13 +323,14 @@ async def convert_fhir_to_hl7(payload: dict) -> ConversionResult:
 async def ai_convert_hl7_to_fhir(payload: dict):
     from app.core.llm_converter import convert_hl7_to_fhir_via_llm
     raw = payload.get("hl7_message", "").strip()
+    provider = payload.get("provider", "groq").lower()
     if not raw:
         raise HTTPException(
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
             detail="Field 'hl7_message' is required.",
         )
     try:
-        result = convert_hl7_to_fhir_via_llm(raw)
+        result = convert_hl7_to_fhir_via_llm(raw, provider=provider)
     except RuntimeError as exc:
         raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail=str(exc))
     except Exception as exc:
@@ -364,6 +365,7 @@ async def ai_convert_hl7_to_fhir(payload: dict):
 async def ai_convert_fhir_to_hl7(payload: dict):
     from app.core.llm_converter import convert_fhir_to_hl7_via_llm
     bundle = payload.get("fhir_bundle")
+    provider = payload.get("provider", "groq").lower()
     if not bundle:
         if payload.get("resourceType") == "Bundle":
             bundle = payload
@@ -373,7 +375,7 @@ async def ai_convert_fhir_to_hl7(payload: dict):
             detail="Field 'fhir_bundle' is required.",
         )
     try:
-        result = convert_fhir_to_hl7_via_llm(bundle)
+        result = convert_fhir_to_hl7_via_llm(bundle, provider=provider)
     except RuntimeError as exc:
         raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail=str(exc))
     except Exception as exc:
@@ -454,13 +456,14 @@ async def convert_ehr_to_fhir(payload: dict):
 async def ai_convert_ehr_to_fhir(payload: dict):
     from app.core.llm_converter import convert_ehr_to_fhir_via_llm
     raw = payload.get("ehr_data", "").strip()
+    provider = payload.get("provider", "groq").lower()
     if not raw:
         raise HTTPException(
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
             detail="Field 'ehr_data' is required.",
         )
     try:
-        result = convert_ehr_to_fhir_via_llm(raw)
+        result = convert_ehr_to_fhir_via_llm(raw, provider=provider)
     except RuntimeError as exc:
         raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail=str(exc))
     except Exception as exc:

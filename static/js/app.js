@@ -335,7 +335,6 @@ window.toggleAIMode = function() {
     aiModeEnabled = checkbox.checked;
   }
   const sw = document.getElementById('ai-toggle-switch');
-  const badge = document.getElementById('ai-mode-badge');
   const banner = document.getElementById('ai-active-banner');
   const convertBtnEl = document.getElementById('convert-btn');
   const btnIcon = document.getElementById('convert-btn-icon');
@@ -343,8 +342,12 @@ window.toggleAIMode = function() {
   const aiOutputBadge = document.getElementById('ai-output-badge');
 
   sw.classList.toggle('on', aiModeEnabled);
-  badge.classList.toggle('hidden', !aiModeEnabled);
   banner.classList.toggle('hidden', !aiModeEnabled);
+  const maskLabel = document.getElementById('mask-phi-label');
+  if (maskLabel) maskLabel.classList.toggle('hidden', !aiModeEnabled);
+  const providerGroup = document.getElementById('ai-provider-group');
+  if (providerGroup) providerGroup.classList.toggle('hidden', !aiModeEnabled);
+  if (aiModeEnabled) updateAIProviderBadge();
   convertBtnEl.classList.toggle('ai-btn', aiModeEnabled);
 
   if (aiModeEnabled) {
@@ -357,6 +360,21 @@ window.toggleAIMode = function() {
 
   // Hide AI output badge until next conversion
   if (aiOutputBadge) aiOutputBadge.classList.add('hidden');
+};
+
+function getAIProvider() {
+  const sel = document.querySelector('input[name="ai-provider"]:checked');
+  return sel ? sel.value : 'groq';
+}
+
+window.updateAIProviderBadge = function() {
+  const provider = getAIProvider();
+  const banner = document.getElementById('ai-active-banner');
+  if (banner) {
+    const model = provider === 'claude' ? 'Claude Sonnet 4.6' : 'Groq AI (Llama 3.3)';
+    const brand = provider === 'claude' ? 'claude-brand' : 'gemini-brand';
+    banner.innerHTML = `✨ <strong>AI Mode ON</strong> — Powered by <span class="${brand}">${model}</span>`;
+  }
 };
 
 // ---------------------------------------------------------------------------
@@ -756,6 +774,145 @@ async function convertFhirFileToHl7(file) {
 }
 
 // ---------------------------------------------------------------------------
+// PHI masking helper — stores original values in phiMap for later unmask
+// ---------------------------------------------------------------------------
+let phiMap = null;
+
+function maskPhiIfEnabled(text) {
+  const cb = document.getElementById('mask-phi-checkbox');
+  if (!cb || !cb.checked) { phiMap = null; return text; }
+
+  phiMap = {};
+
+  const masked = text.split('\n').map(line => {
+    const fields = line.split('|');
+    const seg = fields[0];
+
+    // HL7 PID segment
+    if (seg === 'PID') {
+      if (fields[3]) phiMap.mrn = fields[3].split('^')[0].trim();
+      if (fields[5]) {
+        const n = fields[5].split('^');
+        phiMap.lastName  = (n[0] || '').trim();
+        phiMap.firstName = (n[1] || '').trim();
+      }
+      if (fields[7]) phiMap.dob = fields[7].trim(); // YYYYMMDD
+      if (fields[11]) phiMap.address = fields[11].trim();
+      if (fields[13]) phiMap.phone = fields[13].trim();
+
+      if (fields[19]) phiMap.ssn = fields[19].trim();
+
+      if (fields[3]  !== undefined) fields[3]  = '[MRN_MASKED]';
+      if (fields[5]  !== undefined) fields[5]  = 'PATIENT^MASKED';
+      if (fields[7]  !== undefined) fields[7]  = '19000101';
+      if (fields[11] !== undefined) fields[11] = '123 MASKED ST^^CITY^ST^00000';
+      if (fields[13] !== undefined) fields[13] = '(000)000-0000';
+      if (fields[19] !== undefined) fields[19] = '[SSN_MASKED]';
+      return fields.join('|');
+    }
+
+    // HL7 NK1 segment (next of kin)
+    if (seg === 'NK1') {
+      if (fields[2]) phiMap.nk1Name    = fields[2].trim();
+      if (fields[4]) phiMap.nk1Address = fields[4].trim();
+      if (fields[5]) phiMap.nk1Phone   = fields[5].trim();
+
+      if (fields[2] !== undefined) fields[2] = 'NOK^MASKED';
+      if (fields[4] !== undefined) fields[4] = '123 MASKED ST^^CITY^ST^00000';
+      if (fields[5] !== undefined) fields[5] = '(000)000-0000';
+      return fields.join('|');
+    }
+
+    // EHR PATIENT row: PATIENT|MRN|FirstName|LastName|DOB|Gender|Language|Phone|Address|City|State|Zip
+    if (seg === 'PATIENT') {
+      phiMap.mrn       = (fields[1] || '').trim();
+      phiMap.firstName = (fields[2] || '').trim();
+      phiMap.lastName  = (fields[3] || '').trim();
+      phiMap.dob       = (fields[4] || '').trim(); // YYYY-MM-DD
+      phiMap.phone     = (fields[7] || '').trim();
+      phiMap.address   = (fields[8] || '').trim();
+      phiMap.city      = (fields[9] || '').trim();
+
+      if (fields[1] !== undefined) fields[1] = 'MRN_MASKED';
+      if (fields[2] !== undefined) fields[2] = 'MASKED';
+      if (fields[3] !== undefined) fields[3] = 'PATIENT';
+      if (fields[4] !== undefined) fields[4] = '1900-01-01';
+      if (fields[7] !== undefined) fields[7] = '(000)000-0000';
+      if (fields[8] !== undefined) fields[8] = '123 MASKED ST';
+      if (fields[9] !== undefined) fields[9] = 'CITY';
+      return fields.join('|');
+    }
+
+    return line;
+  }).join('\n');
+
+  return masked;
+}
+
+// Replace masked placeholders with original PHI values in a JSON string
+function applyPhiRestore(jsonStr) {
+  if (!phiMap) return jsonStr;
+  let s = jsonStr;
+  // Convert HL7 DOB YYYYMMDD → FHIR YYYY-MM-DD if needed
+  const dobFhir = phiMap.dob
+    ? (phiMap.dob.includes('-') ? phiMap.dob
+        : phiMap.dob.replace(/^(\d{4})(\d{2})(\d{2})$/, '$1-$2-$3'))
+    : null;
+
+  if (phiMap.lastName)  s = s.split('"PATIENT"').join(`"${phiMap.lastName}"`);
+  if (phiMap.firstName) s = s.split('"MASKED"').join(`"${phiMap.firstName}"`);
+  if (phiMap.mrn)       s = s.split('MRN_MASKED').join(phiMap.mrn);
+  if (dobFhir)          s = s.split('"1900-01-01"').join(`"${dobFhir}"`);
+  if (phiMap.phone)     s = s.split('"(000)000-0000"').join(`"${phiMap.phone}"`);
+  if (phiMap.address)   s = s.split('"123 MASKED ST"').join(`"${phiMap.address}"`);
+  if (phiMap.city && phiMap.city !== 'CITY')
+                        s = s.split('"CITY"').join(`"${phiMap.city}"`);
+  if (phiMap.ssn)       s = s.split('SSN_MASKED').join(phiMap.ssn);
+  // NK1 / RelatedPerson restore
+  if (phiMap.nk1Name) {
+    const parts = phiMap.nk1Name.split('^');
+    const nkLast  = (parts[0] || '').trim();
+    const nkFirst = (parts[1] || '').trim();
+    if (nkLast)  s = s.split('"NOK"').join(`"${nkLast}"`);
+    if (nkFirst) s = s.split('"MASKED"').join(`"${nkFirst}"`);
+  }
+  if (phiMap.nk1Phone)   s = s.split('"(000)000-0000"').join(`"${phiMap.nk1Phone}"`);
+  if (phiMap.nk1Address) s = s.split('"123 MASKED ST"').join(`"${phiMap.nk1Address}"`);
+  return s;
+}
+
+let outputIsUnmasked = false;
+
+// Returns FHIR JSON with PHI restored if the user has unmasked the output,
+// otherwise returns the original (masked) FHIR JSON.
+function getEffectiveFhirJson() {
+  if (!currentResult || !currentResult.fhir_json) return null;
+  if (!outputIsUnmasked || !phiMap) return currentResult.fhir_json;
+  try {
+    return JSON.parse(applyPhiRestore(JSON.stringify(currentResult.fhir_json)));
+  } catch {
+    return currentResult.fhir_json;
+  }
+}
+
+window.toggleUnmask = function() {
+  if (!phiMap || !currentResult) return;
+  outputIsUnmasked = !outputIsUnmasked;
+
+  const rawJson = JSON.stringify(currentResult.fhir_json, null, 2);
+  const display = outputIsUnmasked ? applyPhiRestore(rawJson) : rawJson;
+
+  const jsonEl = document.getElementById('json-output');
+  if (jsonEl) jsonEl.innerHTML = syntaxHighlightJson(display);
+
+  const btn = document.getElementById('unmask-btn');
+  if (btn) {
+    btn.textContent = outputIsUnmasked ? '🔒 Re-mask' : '🔓 Unmask';
+    btn.classList.toggle('tool-btn-active', outputIsUnmasked);
+  }
+};
+
+// ---------------------------------------------------------------------------
 // AI conversion functions
 // ---------------------------------------------------------------------------
 async function aiConvertHl7ToFhir(text) {
@@ -764,7 +921,7 @@ async function aiConvertHl7ToFhir(text) {
     const resp = await fetch(API_BASE + '/api/convert/ai/hl7-to-fhir', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ hl7_message: text }),
+      body: JSON.stringify({ hl7_message: maskPhiIfEnabled(text), provider: getAIProvider() }),
     });
     const data = await resp.json();
     if (!resp.ok) {
@@ -785,7 +942,7 @@ async function aiConvertFhirToHl7(bundle) {
     const resp = await fetch(API_BASE + '/api/convert/ai/fhir-to-hl7', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ fhir_bundle: bundle }),
+      body: JSON.stringify({ fhir_bundle: bundle, provider: getAIProvider() }),
     });
     const data = await resp.json();
     if (!resp.ok) {
@@ -832,7 +989,7 @@ async function aiConvertEhrToFhir(ehrData) {
     const resp = await fetch(API_BASE + '/api/convert/ai/ehr-to-fhir', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ ehr_data: ehrData }),
+      body: JSON.stringify({ ehr_data: maskPhiIfEnabled(typeof ehrData === 'string' ? ehrData : JSON.stringify(ehrData)), provider: getAIProvider() }),
     });
     const data = await resp.json();
     if (!resp.ok) {
@@ -886,6 +1043,14 @@ async function convertFile() {
 // ---------------------------------------------------------------------------
 function handleResult(result) {
   currentResult = result;
+  // Reset unmask state for new result
+  outputIsUnmasked = false;
+  const unmaskBtn = document.getElementById('unmask-btn');
+  if (unmaskBtn) {
+    unmaskBtn.textContent = '🔓 Unmask';
+    unmaskBtn.classList.remove('tool-btn-active');
+    unmaskBtn.classList.toggle('hidden', !phiMap);
+  }
   hideError();
 
   if (!result.success) {
@@ -1122,8 +1287,28 @@ window.generatePDF = function() {
   const msgType  = (currentResult.message_type || 'Unknown').toUpperCase();
   const ts       = currentResult.timestamp ? new Date(currentResult.timestamp).toLocaleString() : new Date().toLocaleString();
   const warnings = currentResult.warnings || [];
-  const summary  = currentResult.resource_summary || [];
   const mappings = currentResult.field_mappings || [];
+
+  // Use effective (possibly unmasked) FHIR JSON to build resource summary for PDF
+  const effectiveFhir = getEffectiveFhirJson();
+  const summary = effectiveFhir && effectiveFhir.entry
+    ? effectiveFhir.entry
+        .filter(e => e.resource)
+        .map(e => {
+          const r = e.resource;
+          const rt = r.resourceType || 'Unknown';
+          let desc = r.id || '';
+          if (rt === 'Patient' && r.name && r.name[0]) {
+            const n = r.name[0];
+            desc = [n.family, ...(n.given || [])].filter(Boolean).join(', ');
+          } else if (r.code && r.code.text) {
+            desc = r.code.text;
+          } else if (r.medicationCodeableConcept && r.medicationCodeableConcept.text) {
+            desc = r.medicationCodeableConcept.text;
+          }
+          return { resource_type: rt, resource_id: r.id || '', description: desc };
+        })
+    : (currentResult.resource_summary || []);
 
   // ---- Header bar ----
   doc.setFillColor(30, 64, 175);          // blue-800
@@ -1233,7 +1418,7 @@ window.copyOutput = async function(type) {
   let text = '';
   let btnEl;
   if (type === 'json') {
-    text = JSON.stringify(currentResult.fhir_json, null, 2);
+    text = JSON.stringify(getEffectiveFhirJson(), null, 2);
     btnEl = document.querySelector('#out-json .tool-btn');
   } else if (type === 'xml') {
     text = currentResult.fhir_xml || '';
@@ -1271,6 +1456,25 @@ window.getTs = function() {
   return `${d.getFullYear()}${pad(d.getMonth()+1)}${pad(d.getDate())}_${pad(d.getHours())}${pad(d.getMinutes())}${pad(d.getSeconds())}`;
 };
 
+// Helper: build a patient-aware base filename e.g. "FHIR_John_Doe_1980-03-15" or "FHIR_Multiple_Patients"
+window.getPatientBasename = function() {
+  const fhir = getEffectiveFhirJson();
+  if (!fhir) return 'FHIR_Export';
+  const entries = (fhir.entry || []);
+  const patients = entries.filter(e => e.resource && e.resource.resourceType === 'Patient').map(e => e.resource);
+  if (patients.length === 0) return 'FHIR_Export';
+  if (patients.length > 1) return 'FHIR_Multiple_Patients';
+  const p = patients[0];
+  let first = 'Patient', last = '', dob = '';
+  if (p.name && p.name[0]) {
+    if (p.name[0].given) first = p.name[0].given[0] || first;
+    if (p.name[0].family) last = p.name[0].family;
+  }
+  if (p.birthDate) dob = '_' + p.birthDate;
+  const name = [first, last].filter(Boolean).join('_').replace(/[^a-z0-9_-]/gi, '_');
+  return `FHIR_${name}${dob}`;
+};
+
 window.downloadOutput = function(type, filename, mimeType) {
   if (!currentResult) return;
   
@@ -1279,14 +1483,15 @@ window.downloadOutput = function(type, filename, mimeType) {
     return;
   }
 
-  if (type === 'json' && currentResult.fhir_json && currentResult.fhir_json.entry) {
+  const effectiveFhir = getEffectiveFhirJson();
+  if (type === 'json' && effectiveFhir && effectiveFhir.entry) {
     downloadPatientGroupedJson();
     return;
   }
 
   let content = '';
   if (type === 'json') {
-    content = JSON.stringify(currentResult.fhir_json, null, 2);
+    content = JSON.stringify(effectiveFhir, null, 2);
   } else if (type === 'xml') {
     content = currentResult.fhir_xml || '';
   } else if (type === 'hl7out') {
@@ -1304,7 +1509,8 @@ window.downloadOutput = function(type, filename, mimeType) {
 };
 
 function downloadPatientGroupedJson() {
-  const entries = currentResult.fhir_json.entry || [];
+  const effectiveFhir = getEffectiveFhirJson();
+  const entries = (effectiveFhir && effectiveFhir.entry) ? effectiveFhir.entry : [];
   const patientGroups = {}; // key: patientId, value: array of entries
 
   let lastPid = 'unknown';
@@ -1340,7 +1546,7 @@ function downloadPatientGroupedJson() {
 
   // Fallback if no specific patients exist
   if (pids.length === 0 || (pids.length === 1 && pids[0] === 'unknown')) {
-    const content = JSON.stringify(currentResult.fhir_json, null, 2);
+    const content = JSON.stringify(getEffectiveFhirJson(), null, 2);
     downloadFile(content, 'fhir_bundle.json', 'application/json');
     return;
   }
@@ -1366,7 +1572,8 @@ function downloadPatientGroupedJson() {
     }
     
     // Sanitize filename
-    let fileName = `${fName}_${lName}_${dob}`.replace(/[^a-z0-9_-]/gi, '_');
+    const namepart = [fName, lName].filter(Boolean).join('_');
+    let fileName = `FHIR_${namepart}_${dob}`.replace(/[^a-z0-9_-]/gi, '_');
     fileName += '.json';
 
     const bundle = {
@@ -1396,7 +1603,7 @@ function downloadPatientGroupedJson() {
       const url = URL.createObjectURL(content);
       const link = document.createElement("a");
       link.href = url;
-      link.download = `fhir_patients_${getTs()}.zip`;
+      link.download = `FHIR_Multiple_Patients_${getTs()}.zip`;
       document.body.appendChild(link);
       link.click();
       document.body.removeChild(link);
@@ -1580,6 +1787,17 @@ function showError(msg, errors) {
   errorPanel.classList.remove('hidden');
   errorMessage.textContent = msg;
   errorList.innerHTML = '';
+  // Detect rate-limit / quota errors and suggest switching AI provider
+  const allText = [msg, ...(errors || [])].join(' ').toLowerCase();
+  const isRateLimit = allText.includes('rate limit') || allText.includes('daily') || allText.includes('token limit') || allText.includes('quota') || allText.includes('429');
+  if (isRateLimit && aiModeEnabled) {
+    const provider = getAIProvider();
+    const other = provider === 'groq' ? 'Claude' : 'Groq';
+    const li = document.createElement('li');
+    li.style.cssText = 'color:#f59e0b;font-weight:600;';
+    li.textContent = `💡 Tip: Switch to ${other} in the AI provider selector above and try again.`;
+    errorList.appendChild(li);
+  }
   errors.forEach(e => {
     const li = document.createElement('li');
     li.textContent = e;
@@ -1845,4 +2063,159 @@ function downloadFile(content, filename, mimeType) {
   a.click();
   document.body.removeChild(a);
   URL.revokeObjectURL(url);
+}
+
+// ===== DARK MODE TOGGLE =====
+window.toggleDarkMode = function() {
+  document.body.classList.toggle('light-mode');
+  const icon = document.getElementById('dark-toggle-icon');
+  if (document.body.classList.contains('light-mode')) {
+    icon.textContent = '☀️';
+    localStorage.setItem('theme', 'light');
+  } else {
+    icon.textContent = '🌙';
+    localStorage.setItem('theme', 'dark');
+  }
+};
+
+// Restore theme on load
+(function() {
+  if (localStorage.getItem('theme') === 'light') {
+    document.body.classList.add('light-mode');
+    const icon = document.getElementById('dark-toggle-icon');
+    if (icon) icon.textContent = '☀️';
+  }
+})();
+
+// ===== GUIDED TOUR =====
+const tourSteps = [
+  {
+    selector: '#direction-toggle',
+    title: '1 · Conversion Direction',
+    text: 'Choose your conversion mode:<br><b>HL7 → FHIR</b> — convert any HL7 v2.x message (ADT, ORM, ORU, SIU, MDM, DFT, VXU…)<br><b>FHIR → HL7</b> — convert a FHIR R4 Bundle back to HL7<br><b>EHR → FHIR</b> — convert raw pipe-delimited EHR records'
+  },
+  {
+    selector: '#in-tab-text',
+    title: '2 · Paste Your Data',
+    text: 'Paste HL7 message, FHIR JSON, or raw EHR pipe-delimited data directly into the text area. The tab label changes based on the selected conversion direction.'
+  },
+  {
+    selector: '#in-tab-file',
+    title: '3 · Upload File',
+    text: 'Upload HL7 (.hl7/.txt), FHIR JSON (.json), CSV, Excel (.xlsx), or DOCX files. For EHR mode, CSV/Excel records are automatically parsed into pipe-delimited format.'
+  },
+  {
+    selector: '.sample-bar',
+    title: '4 · Load Sample Data',
+    text: 'Load pre-built sample messages — ADT (Epic/Cerner), ORM, ORU, SIU, MDM, VXU, or EHR pipe-delimited. Great for exploring conversion output before using your own data.'
+  },
+  {
+    selector: '#ai-toggle-wrap',
+    title: '5 · AI Mode Toggle',
+    text: 'Flip this switch to enable AI-powered conversion using a large language model. AI handles complex, non-standard, or unknown HL7 variants that rule-based parsing cannot process.'
+  },
+  {
+    selector: '#ai-provider-group',
+    title: '6 · AI Provider Selection',
+    text: '<b>⚡ Groq</b> (Llama 3.3 70B) — fast, free tier (100k tokens/day).<br><b>✦ Claude</b> (Sonnet 4.6, Anthropic) — production-grade accuracy. Switch if Groq daily limit is reached.'
+  },
+  {
+    selector: '#mask-phi-label',
+    title: '7 · PHI Masking',
+    text: 'Check <b>🔒 Mask PHI</b> before converting to replace patient name, MRN, SSN, DOB, address, phone, and next-of-kin data with placeholders before sending to the AI. Use <b>🔓 Unmask</b> in the output to restore original values.'
+  },
+  {
+    selector: '#convert-btn',
+    title: '8 · Convert',
+    text: 'Click to run the conversion. The button label and icon update based on mode — rule-based (⚡) or AI (✨). Results appear in the Output panel below.'
+  },
+  {
+    selector: '#in-tab-mapping',
+    title: '9 · Mapping Rules',
+    text: 'View complete field-level mapping documentation for all supported HL7 segments (PID, PV1, ORC, OBR, OBX, NK1, AL1, DG1, IN1, RXA…), EHR record types, AI engine details, PHI masking reference, and download format guide.'
+  },
+  {
+    selector: '#in-tab-history',
+    title: '10 · Conversion History',
+    text: 'All successful conversions are saved locally. Click any history entry to reload the FHIR output. History persists across page reloads.'
+  },
+  {
+    selector: '.output-panel',
+    title: '11 · Output Panel',
+    text: 'Conversion results appear here across 5 tabs:<br><b>FHIR JSON</b> · <b>FHIR XML</b> · <b>PDF Report</b> · <b>Summary</b> · <b>Field Mappings</b><br>Use the toolbar to Copy, download JSON, CSV, Excel, or generate a PDF report.'
+  },
+  {
+    selector: '#unmask-btn',
+    title: '12 · Unmask PHI',
+    text: 'When PHI Masking was used, click <b>🔓 Unmask</b> to restore all original patient data in the output display. Downloads will include the restored data when unmasked.'
+  }
+];
+
+let tourIndex = 0;
+let tourOverlay = null;
+let tourTooltip = null;
+let tourHighlighted = null;
+
+window.startTour = function startTour() {
+  tourIndex = 0;
+  if (!tourOverlay) {
+    tourOverlay = document.createElement('div');
+    tourOverlay.className = 'tour-overlay';
+    tourOverlay.onclick = endTour;
+    document.body.appendChild(tourOverlay);
+  }
+  if (!tourTooltip) {
+    tourTooltip = document.createElement('div');
+    tourTooltip.className = 'tour-tooltip';
+    document.body.appendChild(tourTooltip);
+  }
+  showTourStep(tourIndex);
+}
+
+window.showTourStep = function showTourStep(index) {
+  if (tourHighlighted) tourHighlighted.classList.remove('tour-highlight');
+  if (index >= tourSteps.length) { endTour(); return; }
+
+  const step = tourSteps[index];
+  const el = document.querySelector(step.selector);
+  if (!el) { showTourStep(index + 1); return; }
+
+  el.classList.add('tour-highlight');
+  tourHighlighted = el;
+
+  const rect = el.getBoundingClientRect();
+  tourTooltip.innerHTML = `
+    <h4>${step.title}</h4>
+    <p>${step.text}</p>
+    <div class="tour-actions">
+      <button class="tour-skip-btn" onclick="endTour()">Skip tour</button>
+      <span class="tour-step-label">Step ${index + 1} / ${tourSteps.length}</span>
+      <button class="tour-next-btn" onclick="showTourStep(${index + 1})">${index + 1 < tourSteps.length ? 'Next →' : 'Done'}</button>
+    </div>
+  `;
+  tourTooltip.style.display = 'block';
+  tourOverlay.style.display = 'block';
+
+  // Smart positioning: show below element, but flip above if too close to bottom
+  const tooltipH = tourTooltip.offsetHeight || 160;
+  const tooltipW = Math.min(tourTooltip.offsetWidth || 300, 300);
+  const margin = 12;
+  let top, left;
+
+  if (rect.bottom + tooltipH + margin < window.innerHeight) {
+    top = rect.bottom + margin; // below
+  } else {
+    top = Math.max(margin, rect.top - tooltipH - margin); // above
+  }
+  left = Math.min(rect.left, window.innerWidth - tooltipW - margin);
+  left = Math.max(margin, left);
+
+  tourTooltip.style.top = top + 'px';
+  tourTooltip.style.left = left + 'px';
+}
+
+window.endTour = function endTour() {
+  if (tourHighlighted) { tourHighlighted.classList.remove('tour-highlight'); tourHighlighted = null; }
+  if (tourOverlay) { tourOverlay.style.display = 'none'; }
+  if (tourTooltip) { tourTooltip.style.display = 'none'; }
 }
