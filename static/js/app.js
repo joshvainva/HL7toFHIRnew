@@ -1624,9 +1624,10 @@ function flattenObject(obj, prefix, result) {
     } else if (Array.isArray(val)) {
       val.forEach((item, i) => {
         if (item !== null && typeof item === 'object') {
-          flattenObject(item, newKey + '[' + i + ']', result);
+          flattenObject(item, newKey, result);
         } else {
-          result[newKey + '[' + i + ']'] = item;
+          // only add if key not already set (first value wins)
+          if (!(newKey in result)) result[newKey] = item;
         }
       });
     } else if (typeof val === 'object') {
