@@ -745,8 +745,8 @@
               <button class="tool-btn hidden" id="unmask-btn" onclick="toggleUnmask()" title="Restore original patient data in the output">🔓 Unmask</button>
               <button class="tool-btn" onclick="copyOutput('json')">📋 Copy</button>
               <button class="tool-btn" onclick="downloadOutput('json', getPatientBasename()+'_'+getTs()+'.json', 'application/json')">⬇ JSON</button>
-              <button class="tool-btn" onclick="downloadOutput('csv', getPatientBasename()+'_'+getTs()+'.zip', 'text/csv')">⬇ CSV</button>
-              <button class="tool-btn" onclick="downloadOutput('xlsx', getPatientBasename()+'_'+getTs()+'.xlsx', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')">⬇ Excel</button>
+              <button class="tool-btn" id="btn-dl-csv" onclick="downloadOutput('csv', getPatientBasename()+'_'+getTs()+'.zip', 'text/csv')">⬇ CSV</button>
+              <button class="tool-btn" id="btn-dl-excel" onclick="downloadOutput('xlsx', getPatientBasename()+'_'+getTs()+'.xlsx', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')">⬇ Excel</button>
             </div>
           </div>
           <div class="output-tabs">

@@ -1101,6 +1101,12 @@ function handleResult(result) {
   const hl7outEl = document.getElementById('hl7out-output');
   if (hl7outEl) hl7outEl.textContent = result.hl7_output ? result.hl7_output.replace(/\r/g, '\n') : '';
 
+  // Hide CSV/Excel buttons for FHIR→HL7 (output is HL7 text, not a FHIR bundle)
+  const csvBtn = document.getElementById('btn-dl-csv');
+  const excelBtn = document.getElementById('btn-dl-excel');
+  if (csvBtn) csvBtn.classList.toggle('hidden', isFhirToHl7);
+  if (excelBtn) excelBtn.classList.toggle('hidden', isFhirToHl7);
+
   // Show/hide mappings tab based on direction and content
   const mappingsTab = document.getElementById('out-tab-mappings');
   if (mappingsTab) {
