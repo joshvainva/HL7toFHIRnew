@@ -664,9 +664,23 @@ convertBtn.addEventListener('click', async () => {
 
   // ── EHR Raw → FHIR ──────────────────────────────────────────────────────
   if (conversionDirection === 'ehr_to_fhir') {
-    const text = document.getElementById('ehr-input').value.trim();
+    let text = document.getElementById('ehr-input').value.trim();
+    // If textarea is empty but a file was uploaded, read the file content
+    if (!text && uploadedFile) {
+      try {
+        text = await new Promise((resolve, reject) => {
+          const reader = new FileReader();
+          reader.onload = e => resolve(e.target.result.trim());
+          reader.onerror = () => reject(new Error('Failed to read file'));
+          reader.readAsText(uploadedFile);
+        });
+      } catch (e) {
+        showError('Failed to read uploaded file: ' + e.message, []);
+        return;
+      }
+    }
     if (!text) {
-      showError('Please paste raw EHR data or load the sample.', []);
+      showError('Please paste raw EHR data or upload a file.', []);
       return;
     }
     if (aiModeEnabled) {
