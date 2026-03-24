@@ -1612,6 +1612,24 @@ function downloadPatientGroupedJson() {
   }
 }
 
+function flattenObject(obj, prefix, result) {
+  prefix = prefix || '';
+  result = result || {};
+  for (const key in obj) {
+    if (!Object.prototype.hasOwnProperty.call(obj, key)) continue;
+    const val = obj[key];
+    const newKey = prefix ? prefix + '.' + key : key;
+    if (val !== null && typeof val === 'object' && !Array.isArray(val)) {
+      flattenObject(val, newKey, result);
+    } else if (Array.isArray(val)) {
+      result[newKey] = JSON.stringify(val);
+    } else {
+      result[newKey] = val;
+    }
+  }
+  return result;
+}
+
 function exportDataToSpreadsheet(format, filename) {
   if (!currentResult) return;
   if (!window.XLSX) {
@@ -1650,6 +1668,23 @@ function exportDataToSpreadsheet(format, filename) {
     });
     sheets[rt].push(row);
   });
+
+  // Fallback for AI conversions: build sheets directly from FHIR bundle entries
+  if (Object.keys(sheets).length === 0 && currentResult.fhir_json) {
+    try {
+      const bundle = typeof currentResult.fhir_json === 'string'
+        ? JSON.parse(currentResult.fhir_json)
+        : currentResult.fhir_json;
+      (bundle.entry || []).forEach(entry => {
+        const res = entry.resource;
+        if (!res) return;
+        const rt = (res.resourceType || 'Resource').substring(0, 31);
+        if (!sheets[rt]) sheets[rt] = [];
+        const row = flattenObject(res);
+        sheets[rt].push(row);
+      });
+    } catch (e) { /* ignore parse errors */ }
+  }
 
   if (Object.keys(sheets).length === 0) {
     alert("No mapped data available to export.");
