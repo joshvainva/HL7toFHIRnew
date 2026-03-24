@@ -1619,10 +1619,18 @@ function flattenObject(obj, prefix, result) {
     if (!Object.prototype.hasOwnProperty.call(obj, key)) continue;
     const val = obj[key];
     const newKey = prefix ? prefix + '.' + key : key;
-    if (val !== null && typeof val === 'object' && !Array.isArray(val)) {
-      flattenObject(val, newKey, result);
+    if (val === null || val === undefined) {
+      result[newKey] = '';
     } else if (Array.isArray(val)) {
-      result[newKey] = JSON.stringify(val);
+      val.forEach((item, i) => {
+        if (item !== null && typeof item === 'object') {
+          flattenObject(item, newKey + '[' + i + ']', result);
+        } else {
+          result[newKey + '[' + i + ']'] = item;
+        }
+      });
+    } else if (typeof val === 'object') {
+      flattenObject(val, newKey, result);
     } else {
       result[newKey] = val;
     }
