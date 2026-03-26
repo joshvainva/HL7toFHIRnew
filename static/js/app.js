@@ -1667,9 +1667,8 @@ function flattenObject(obj, prefix, result) {
 function buildSheetsFromResult(result, sheets) {
   // Build rows from field_mappings — skip label-only entries (no actual field data)
   (result.field_mappings || []).forEach(rm => {
-    // Skip label/separator entries like "EHR MESSAGE 1 – FATIGUE" or "ehr message 3 – emergency app"
+    // Skip label/separator entries (no field data)
     if (!rm.field_mappings || rm.field_mappings.length === 0) return;
-    if (/^ehr\s+message\s*\d/i.test(rm.resource_type || '')) return;
 
     let rt = rm.resource_type;
     const seg = rm.field_mappings[0].hl7_segment;
@@ -1681,6 +1680,9 @@ function buildSheetsFromResult(result, sheets) {
       if (rt === "AllergyIntolerance") rt = "Allergy";
     }
     rt = rt.substring(0, 31);
+
+    // Skip any tab whose name looks like a message label (e.g. "Ehr Message 3 – Emergency App")
+    if (/^ehr\s+message\s*\d/i.test(rt)) return;
     if (!sheets[rt]) sheets[rt] = [];
     const row = {};
     rm.field_mappings.forEach(f => {
