@@ -600,6 +600,9 @@ def _build_mappings(parsed_lines: List[tuple], is_multi_patient: bool = False) -
         "CLINICAL_NOTE": "ClinicalImpression",
     }
     for record_type, line_cols, p_first, p_last, p_dob in parsed_lines:
+        # Skip unrecognised record types (e.g. comment-style headers like "ehr message 3 – ...")
+        if record_type not in resource_type_map:
+            continue
         field_names = _FIELD_DEFS.get(record_type, [])
         fhir_fields = _FHIR_MAP.get(record_type, [])
         rt = resource_type_map.get(record_type, record_type)
