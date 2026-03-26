@@ -321,6 +321,7 @@ const FHIR_SAMPLES = {
 // State
 // ---------------------------------------------------------------------------
 let currentResult = null;
+let currentBatch = null;   // stores all batch results for multi-message export
 let uploadedFile = null;
 let historyItems = [];
 let conversionDirection = 'hl7_to_fhir';
@@ -1037,6 +1038,7 @@ async function convertFile() {
       if (successes.length === 0) {
         showError(`None of the ${data.count} messages could be converted.`, []);
       } else {
+        currentBatch = successes;  // store all for multi-message Excel/CSV export
         handleResult(successes[0]);
         if (data.count > 1) {
           addWarning(`Batch file: ${data.count} messages found, showing first result. Download to get all.`);
@@ -1057,8 +1059,11 @@ async function convertFile() {
 // ---------------------------------------------------------------------------
 function handleResult(result) {
   currentResult = result;
+  if (!currentBatch) currentBatch = null;  // reset if not set by batch handler
   // Reset unmask state for new result
   outputIsUnmasked = false;
+  // If this result was NOT from an AI+masked conversion, clear phiMap so unmask button stays hidden
+  if (!result.ai_powered) phiMap = null;
   const unmaskBtn = document.getElementById('unmask-btn');
   if (unmaskBtn) {
     unmaskBtn.textContent = '🔓 Unmask';
@@ -1659,6 +1664,52 @@ function flattenObject(obj, prefix, result) {
   return result;
 }
 
+function buildSheetsFromResult(result, sheets) {
+  // Build rows from field_mappings — skip label-only entries (no actual field data)
+  (result.field_mappings || []).forEach(rm => {
+    // Skip label/separator entries like "EHR MESSAGE 1 – FATIGUE"
+    if (!rm.field_mappings || rm.field_mappings.length === 0) return;
+
+    let rt = rm.resource_type;
+    const seg = rm.field_mappings[0].hl7_segment;
+    if (seg) {
+      rt = seg.toLowerCase().split('_').map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ');
+      if (rt === "Medication") rt = "Medication Statement";
+    } else {
+      if (rt === "ClinicalImpression") rt = "Clinical note";
+      if (rt === "AllergyIntolerance") rt = "Allergy";
+    }
+    rt = rt.substring(0, 31);
+    if (!sheets[rt]) sheets[rt] = [];
+    const row = {};
+    rm.field_mappings.forEach(f => {
+      const colName = f.description || f.fhir_field;
+      row[colName] = f.hl7_value || '';
+    });
+    // Only push rows that start from Patient (skip rows with no meaningful data)
+    if (Object.values(row).some(v => v !== '')) sheets[rt].push(row);
+  });
+
+  // Fallback: build from FHIR bundle when field_mappings is empty (AI mode)
+  if (Object.keys(sheets).length === 0 && result.fhir_json) {
+    try {
+      const bundle = typeof result.fhir_json === 'string'
+        ? JSON.parse(result.fhir_json) : result.fhir_json;
+      // Start from Patient — skip entries before first Patient resource
+      let patientSeen = false;
+      (bundle.entry || []).forEach(entry => {
+        const res = entry.resource;
+        if (!res) return;
+        if (res.resourceType === 'Patient') patientSeen = true;
+        if (!patientSeen) return;  // skip entries before Patient
+        const rt = (res.resourceType || 'Resource').substring(0, 31);
+        if (!sheets[rt]) sheets[rt] = [];
+        sheets[rt].push(flattenObject(res));
+      });
+    } catch (e) { /* ignore */ }
+  }
+}
+
 function exportDataToSpreadsheet(format, filename) {
   if (!currentResult) return;
   if (!window.XLSX) {
@@ -1666,129 +1717,76 @@ function exportDataToSpreadsheet(format, filename) {
     return;
   }
 
-  // Build sheets by Resource Type
-  const sheets = {};
+  const wb = XLSX.utils.book_new();
 
-  (currentResult.field_mappings || []).forEach(rm => {
-    // Generate sheet names directly from the original EHR Segment (e.g., SYMPTOM, VITAL)
-    // so that dissimilar records (like Vitals vs Lab Results) aren't mixed into one tab.
-    let rt = rm.resource_type;
-    let seg = (rm.field_mappings && rm.field_mappings.length > 0) ? rm.field_mappings[0].hl7_segment : null;
-    
-    if (seg) {
-      // Convert "LAB_RESULT" to "Lab Result"
-      rt = seg.toLowerCase().split('_').map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ');
-      
-      // Some manual overrides just in case
-      if (rt === "Medication") rt = "Medication Statement";
-    } else {
-      if (rt === "ClinicalImpression") rt = "Clinical note";
-      if (rt === "AllergyIntolerance") rt = "Allergy";
-    }
-    
-    if (!sheets[rt]) sheets[rt] = [];
-    
-    const row = {};
-    (rm.field_mappings || []).forEach(f => {
-      // Use the original EHR column header from description (e.g., "MRN", "First Name")
-      // fallback to fhir_field if empty
-      let colName = f.description || f.fhir_field; 
-      row[colName] = f.hl7_value || '';
-    });
-    sheets[rt].push(row);
-  });
+  // For batch (multiple messages), build one set of sheets per message
+  const resultsToExport = currentBatch && currentBatch.length > 1 ? currentBatch : [currentResult];
 
-  // Apply PHI restore to field_mappings rows if user has unmasked
-  if (outputIsUnmasked && phiMap && Object.keys(sheets).length > 0) {
-    const restored = JSON.parse(applyPhiRestore(JSON.stringify(sheets)));
-    Object.keys(restored).forEach(k => { sheets[k] = restored[k]; });
-  }
-
-  // Fallback for AI conversions: build sheets directly from FHIR bundle entries
-  if (Object.keys(sheets).length === 0 && currentResult.fhir_json) {
-    try {
-      const effectiveJson = getEffectiveFhirJson();
-      const bundle = typeof effectiveJson === 'string'
-        ? JSON.parse(effectiveJson)
-        : effectiveJson;
-      (bundle.entry || []).forEach(entry => {
-        const res = entry.resource;
-        if (!res) return;
-        const rt = (res.resourceType || 'Resource').substring(0, 31);
-        if (!sheets[rt]) sheets[rt] = [];
-        const row = flattenObject(res);
-        sheets[rt].push(row);
+  if (resultsToExport.length > 1) {
+    // Multi-message: prefix each sheet with "Msg1_", "Msg2_", etc.
+    resultsToExport.forEach((res, idx) => {
+      const prefix = `Msg${idx + 1}_`;
+      const sheets = {};
+      buildSheetsFromResult(res, sheets);
+      // Apply PHI restore if unmasked
+      if (outputIsUnmasked && phiMap && Object.keys(sheets).length > 0) {
+        const restored = JSON.parse(applyPhiRestore(JSON.stringify(sheets)));
+        Object.keys(restored).forEach(k => { sheets[k] = restored[k]; });
+      }
+      Object.entries(sheets).forEach(([rt, rows]) => {
+        if (rows.length === 0) return;
+        const sheetName = (prefix + rt).substring(0, 31);
+        XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(rows), sheetName);
       });
-    } catch (e) { /* ignore parse errors */ }
+    });
+  } else {
+    // Single message
+    const sheets = {};
+    buildSheetsFromResult(currentResult, sheets);
+    // Apply PHI restore if unmasked
+    if (outputIsUnmasked && phiMap && Object.keys(sheets).length > 0) {
+      const restored = JSON.parse(applyPhiRestore(JSON.stringify(sheets)));
+      Object.keys(restored).forEach(k => { sheets[k] = restored[k]; });
+    }
+    Object.entries(sheets).forEach(([rt, rows]) => {
+      if (rows.length === 0) return;
+      XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(rows), rt);
+    });
   }
 
-  if (Object.keys(sheets).length === 0) {
+  if (wb.SheetNames.length === 0) {
     alert("No mapped data available to export.");
     return;
   }
 
-  const wb = XLSX.utils.book_new();
-  
-  for (const [rt, rows] of Object.entries(sheets)) {
-    // Excel sheet names max length is 31
-    const sheetName = rt.substring(0, 31);
-    const ws = XLSX.utils.json_to_sheet(rows);
-
-    // Apply Styles (Requires xlsx-js-style)
-    if (ws['!ref']) {
-      const range = XLSX.utils.decode_range(ws['!ref']);
-      for (let R = range.s.r; R <= range.e.r; ++R) {
-        for (let C = range.s.c; C <= range.e.c; ++C) {
-          const address = XLSX.utils.encode_cell({ c: C, r: R });
-          if (!ws[address]) continue;
-          
-          if (R === 0) {
-            // Header Row Styling: Cool Blue Header, White Bold Text, Full Borders
-            ws[address].s = {
-              fill: { fgColor: { rgb: "FF4F81BD" } },
-              font: { bold: true, color: { rgb: "FFFFFFFF" } },
-              border: {
-                top: { style: "thin", color: { rgb: "FF000000" } },
-                bottom: { style: "thin", color: { rgb: "FF000000" } },
-                left: { style: "thin", color: { rgb: "FF000000" } },
-                right: { style: "thin", color: { rgb: "FF000000" } }
-              },
-              alignment: { horizontal: "center", vertical: "center" }
-            };
-          } else {
-            // Data Row Styling: Subtle Light Borders
-            ws[address].s = {
-              border: {
-                top: { style: "hair", color: { rgb: "FFCCCCCC" } },
-                bottom: { style: "hair", color: { rgb: "FFCCCCCC" } },
-                left: { style: "hair", color: { rgb: "FFCCCCCC" } },
-                right: { style: "hair", color: { rgb: "FFCCCCCC" } }
-              }
-            };
-          }
+  // Apply styling to all sheets in the workbook
+  wb.SheetNames.forEach(sheetName => {
+    const ws = wb.Sheets[sheetName];
+    if (!ws['!ref']) return;
+    const range = XLSX.utils.decode_range(ws['!ref']);
+    for (let R = range.s.r; R <= range.e.r; ++R) {
+      for (let C = range.s.c; C <= range.e.c; ++C) {
+        const address = XLSX.utils.encode_cell({ c: C, r: R });
+        if (!ws[address]) continue;
+        if (R === 0) {
+          ws[address].s = {
+            fill: { fgColor: { rgb: "FF4F81BD" } },
+            font: { bold: true, color: { rgb: "FFFFFFFF" } },
+            border: { top: { style: "thin", color: { rgb: "FF000000" } }, bottom: { style: "thin", color: { rgb: "FF000000" } }, left: { style: "thin", color: { rgb: "FF000000" } }, right: { style: "thin", color: { rgb: "FF000000" } } },
+            alignment: { horizontal: "center", vertical: "center" }
+          };
+        } else {
+          ws[address].s = { border: { top: { style: "hair", color: { rgb: "FFCCCCCC" } }, bottom: { style: "hair", color: { rgb: "FFCCCCCC" } }, left: { style: "hair", color: { rgb: "FFCCCCCC" } }, right: { style: "hair", color: { rgb: "FFCCCCCC" } } } };
         }
       }
     }
-
-    // Add margin/table look by auto-sizing columns
+    // Auto-size columns
+    const rows = XLSX.utils.sheet_to_json(ws);
     if (rows.length > 0) {
-      const colWidths = [];
-      const keys = Object.keys(rows[0] || {});
-      keys.forEach(k => {
-        let maxLen = k.length; // header length
-        rows.forEach(r => {
-          if (r[k] && r[k].toString().length > maxLen) {
-            maxLen = r[k].toString().length;
-          }
-        });
-        // add padding so texts don't stick to grid lines
-        colWidths.push({ wch: maxLen + 4 }); 
-      });
-      ws['!cols'] = colWidths;
+      const keys = Object.keys(rows[0]);
+      ws['!cols'] = keys.map(k => ({ wch: Math.min(50, Math.max(k.length, ...rows.map(r => String(r[k] || '').length)) + 4) }));
     }
-
-    XLSX.utils.book_append_sheet(wb, ws, sheetName);
-  }
+  });
 
   if (format === 'csv') {
     // CSV doesn't support tabs natively. We'll generate a ZIP file containing multiple CSVs!
