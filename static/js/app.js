@@ -1667,8 +1667,9 @@ function flattenObject(obj, prefix, result) {
 function buildSheetsFromResult(result, sheets) {
   // Build rows from field_mappings — skip label-only entries (no actual field data)
   (result.field_mappings || []).forEach(rm => {
-    // Skip label/separator entries like "EHR MESSAGE 1 – FATIGUE"
+    // Skip label/separator entries like "EHR MESSAGE 1 – FATIGUE" or "ehr message 3 – emergency app"
     if (!rm.field_mappings || rm.field_mappings.length === 0) return;
+    if (/^ehr\s+message\s*\d/i.test(rm.resource_type || '')) return;
 
     let rt = rm.resource_type;
     const seg = rm.field_mappings[0].hl7_segment;
