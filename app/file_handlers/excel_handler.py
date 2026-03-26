@@ -36,11 +36,12 @@ class ExcelHandler(BaseFileHandler):
         messages = []
         ehr_lines = []
         is_ehr = False
-        valid_sheets = {"PATIENT", "ENCOUNTER", "ALLERGY", "DIAGNOSIS", "LAB_ORDER", "LAB_RESULT", "VITAL", "IMMUNIZATION", "INSURANCE", "NK1", "CHIEF_COMPLAINT", "SYMPTOM", "PROCEDURE", "MEDICATION", "CLINICAL_NOTE"}
+        valid_types = {"PATIENT", "ENCOUNTER", "ALLERGY", "DIAGNOSIS", "LAB_ORDER", "LAB_RESULT", "VITAL", "IMMUNIZATION", "INSURANCE", "NK1", "CHIEF_COMPLAINT", "SYMPTOM", "PROCEDURE", "MEDICATION", "CLINICAL_NOTE"}
 
         for sheet in wb.worksheets:
             sheet_title = sheet.title.strip().upper()
-            if sheet_title in valid_sheets:
+            if sheet_title in valid_types:
+                # Table-format sheet named after an EHR type (e.g. sheet "PATIENT" with column headers)
                 is_ehr = True
                 for row in sheet.iter_rows(values_only=True):
                     if not any(row): continue
@@ -50,14 +51,25 @@ class ExcelHandler(BaseFileHandler):
                     else:
                         ehr_lines.append(sheet_title + "|" + "|".join(str_row))
             else:
+                # Generic sheet — check for pipe-delimited EHR lines in cells OR HL7 MSH lines
+                pipe_ehr_lines = []
                 for row in sheet.iter_rows(values_only=True):
                     for cell_val in row:
                         if cell_val is None:
                             continue
                         text = str(cell_val).strip()
+                        if not text:
+                            continue
+                        record_type = text.split("|")[0].strip().upper()
                         if text.upper().startswith("MSH|"):
                             messages.append(text)
-                            break  # one message per row
+                            break
+                        elif record_type in valid_types:
+                            pipe_ehr_lines.append(text)
+                            break  # one EHR line per row
+                if pipe_ehr_lines:
+                    is_ehr = True
+                    ehr_lines.extend(pipe_ehr_lines)
 
         if is_ehr and ehr_lines:
             messages.append("\n".join(ehr_lines))
@@ -83,11 +95,11 @@ class ExcelHandler(BaseFileHandler):
         messages = []
         ehr_lines = []
         is_ehr = False
-        valid_sheets = {"PATIENT", "ENCOUNTER", "ALLERGY", "DIAGNOSIS", "LAB_ORDER", "LAB_RESULT", "VITAL", "IMMUNIZATION", "INSURANCE", "NK1", "CHIEF_COMPLAINT", "SYMPTOM", "PROCEDURE", "MEDICATION", "CLINICAL_NOTE"}
+        valid_types = {"PATIENT", "ENCOUNTER", "ALLERGY", "DIAGNOSIS", "LAB_ORDER", "LAB_RESULT", "VITAL", "IMMUNIZATION", "INSURANCE", "NK1", "CHIEF_COMPLAINT", "SYMPTOM", "PROCEDURE", "MEDICATION", "CLINICAL_NOTE"}
 
         for sheet in wb.sheets():
             sheet_title = str(sheet.name).strip().upper()
-            if sheet_title in valid_sheets:
+            if sheet_title in valid_types:
                 is_ehr = True
                 for row_idx in range(sheet.nrows):
                     row_vals = []
@@ -100,15 +112,25 @@ class ExcelHandler(BaseFileHandler):
                     else:
                         ehr_lines.append(sheet_title + "|" + "|".join(row_vals))
             else:
+                pipe_ehr_lines = []
                 for row_idx in range(sheet.nrows):
                     for col_idx in range(sheet.ncols):
                         cell_val = sheet.cell_value(row_idx, col_idx)
                         if not cell_val:
                             continue
                         text = str(cell_val).strip()
+                        if not text:
+                            continue
+                        record_type = text.split("|")[0].strip().upper()
                         if text.upper().startswith("MSH|"):
                             messages.append(text)
                             break
+                        elif record_type in valid_types:
+                            pipe_ehr_lines.append(text)
+                            break
+                if pipe_ehr_lines:
+                    is_ehr = True
+                    ehr_lines.extend(pipe_ehr_lines)
 
         if is_ehr and ehr_lines:
             messages.append("\n".join(ehr_lines))

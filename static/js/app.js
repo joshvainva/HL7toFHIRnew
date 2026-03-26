@@ -322,6 +322,7 @@ const FHIR_SAMPLES = {
 // ---------------------------------------------------------------------------
 let currentResult = null;
 let currentBatch = null;   // stores all batch results for multi-message export
+window._ehrExcelIsTableFormat = false;
 let uploadedFile = null;
 let historyItems = [];
 let conversionDirection = 'hl7_to_fhir';
@@ -665,16 +666,272 @@ convertBtn.addEventListener('click', async () => {
 
   // ── EHR Raw → FHIR ──────────────────────────────────────────────────────
   if (conversionDirection === 'ehr_to_fhir') {
+    window._ehrExcelIsTableFormat = false;
     let text = document.getElementById('ehr-input').value.trim();
     // If textarea is empty but a file was uploaded, read the file content
     if (!text && uploadedFile) {
+      const fname = uploadedFile.name.toLowerCase();
+      const isExcel = fname.endsWith('.xlsx') || fname.endsWith('.xls');
       try {
-        text = await new Promise((resolve, reject) => {
-          const reader = new FileReader();
-          reader.onload = e => resolve(e.target.result.trim());
-          reader.onerror = () => reject(new Error('Failed to read file'));
-          reader.readAsText(uploadedFile);
-        });
+        if (isExcel) {
+          // Use SheetJS to extract EHR pipe-delimited lines from Excel
+          text = await new Promise((resolve, reject) => {
+            const reader = new FileReader();
+            reader.onload = e => {
+              try {
+                const validTypes = new Set(['PATIENT','ENCOUNTER','ALLERGY','DIAGNOSIS','LAB_ORDER','LAB_RESULT','VITAL','IMMUNIZATION','INSURANCE','NK1','CHIEF_COMPLAINT','SYMPTOM','PROCEDURE','MEDICATION','CLINICAL_NOTE']);
+                // Normalize sheet name: uppercase + replace spaces with underscores
+                const SHEET_ALIASES = {
+                  MEDICATION_STATEMENT:'MEDICATION', MEDICATION_STATEMENTS:'MEDICATION', MEDICATIONS:'MEDICATION',
+                  LAB_RESULTS:'LAB_RESULT', VITALS:'VITAL', VITAL_SIGNS:'VITAL',
+                  ALLERGIES:'ALLERGY', DIAGNOSES:'DIAGNOSIS', PROCEDURES:'PROCEDURE',
+                  IMMUNIZATIONS:'IMMUNIZATION', CHIEF_COMPLAINTS:'CHIEF_COMPLAINT', SYMPTOMS:'SYMPTOM',
+                  CLINICAL_NOTES:'CLINICAL_NOTE', INSURANCES:'INSURANCE', ENCOUNTERS:'ENCOUNTER', PATIENTS:'PATIENT',
+                };
+                const normalizeSheet = n => { const u = n.trim().toUpperCase().replace(/\s+/g,'_'); return SHEET_ALIASES[u] || u; };
+                const wb = XLSX.read(e.target.result, { type: 'array' });
+                const lines = [];
+                let isTableFormat = false;
+
+                // Canonical field order for each EHR record type (header aliases -> position)
+                // Format: RECORD_TYPE -> [ [alias,...], ... ] (position = array index)
+                const EHR_FIELD_MAP = {
+                  PATIENT: [
+                    ['mrn','patient id','patient_id','medical record','medical record number','id'],
+                    ['first','first name','firstname','given name','given'],
+                    ['last','last name','lastname','family name','family','surname'],
+                    ['dob','date of birth','dateofbirth','birth date','birthdate'],
+                    ['gender','sex'],
+                    ['language','preferred language'],
+                    ['phone','phone number','telephone'],
+                    ['address','street','street address'],
+                    ['city'],
+                    ['state'],
+                    ['zip','zipcode','zip code','postal code'],
+                  ],
+                  ENCOUNTER: [
+                    ['visit id','visitid','encounter id','encounterid','id'],
+                    ['visit type','visittype','type','encounter type'],
+                    ['location','facility'],
+                    ['provider id','providerid'],
+                    ['provider name','providername','provider','attending'],
+                    ['start','admit date','admitdate','start date','startdate','admission date'],
+                    ['end','discharge date','dischargedate','end date','enddate'],
+                  ],
+                  ALLERGY: [
+                    ['seq','sequence','#','no'],
+                    ['substance','allergen','allergy','name'],
+                    ['reaction'],
+                    ['onset','onset date','onsetdate','date'],
+                  ],
+                  DIAGNOSIS: [
+                    ['seq','sequence','#','no'],
+                    ['icd code','icdcode','icd','code','diagnosis code'],
+                    ['description','diagnosis','name','condition'],
+                  ],
+                  LAB_ORDER: [
+                    ['order id','orderid','id'],
+                    ['panel','panel name','panelname','test panel','test'],
+                    ['ordered','ordered time','orderedtime','order date','orderdate'],
+                  ],
+                  LAB_RESULT: [
+                    ['seq','sequence','#','no'],
+                    ['loinc','loinc code','loinccode','code'],
+                    ['test','test name','testname','name'],
+                    ['value','result','result value'],
+                    ['unit','units'],
+                    ['ref range','refrange','reference range','normal range'],
+                    ['flag','abnormal flag'],
+                  ],
+                  VITAL: [
+                    ['type','vital type','vitaltype','vital'],
+                    ['value','result'],
+                    ['unit','units'],
+                  ],
+                  IMMUNIZATION: [
+                    ['vaccine','vaccine name','vaccinename','name'],
+                    ['date','administered','administration date'],
+                    ['dose'],
+                    ['unit','units'],
+                    ['route'],
+                    ['site'],
+                  ],
+                  INSURANCE: [
+                    ['provider','insurance provider','insuranceprovider','payer'],
+                    ['plan','plan name'],
+                    ['group','group number','groupnumber'],
+                    ['member id','memberid','member'],
+                  ],
+                  NK1: [
+                    ['seq','sequence','#','no'],
+                    ['name','contact name','next of kin'],
+                    ['relationship','relation'],
+                    ['phone','phone number'],
+                  ],
+                  CHIEF_COMPLAINT: [
+                    ['complaint','chief complaint','description','text'],
+                  ],
+                  SYMPTOM: [
+                    ['symptom','name','description'],
+                    ['onset','onset date'],
+                    ['severity'],
+                  ],
+                  PROCEDURE: [
+                    ['code','procedure code','cpt','cpt code'],
+                    ['description','procedure','name'],
+                    ['date','procedure date'],
+                    ['provider','performing provider'],
+                  ],
+                  MEDICATION: [
+                    ['name','medication','drug','medication name'],
+                    ['dose','dosage'],
+                    ['route'],
+                    ['frequency','freq'],
+                    ['start','start date','startdate'],
+                    ['end','end date','enddate'],
+                    ['status'],
+                  ],
+                  CLINICAL_NOTE: [
+                    ['type','note type','notetype'],
+                    ['date','note date'],
+                    ['provider','author'],
+                    ['text','note','content'],
+                  ],
+                };
+
+                // Map a data row to canonical pipe-delimited EHR line using header aliases
+                function mapRowToEhr(type, headers, dataRow) {
+                  const fieldDefs = EHR_FIELD_MAP[type];
+                  if (!fieldDefs) {
+                    // No mapping defined — just join as-is
+                    const vals = dataRow.map(c => String(c === null || c === undefined ? '' : c).trim());
+                    return vals.some(v => v) ? type + '|' + vals.join('|') : null;
+                  }
+                  // Build a header->colIndex map (lowercase)
+                  const hdrIdx = {};
+                  headers.forEach((h, i) => { hdrIdx[String(h).trim().toLowerCase()] = i; });
+                  // For each canonical field, find the best matching column
+                  const result = fieldDefs.map(aliases => {
+                    for (const alias of aliases) {
+                      if (hdrIdx[alias] !== undefined) {
+                        const v = dataRow[hdrIdx[alias]];
+                        return String(v === null || v === undefined ? '' : v).trim();
+                      }
+                    }
+                    return ''; // field not found
+                  });
+                  return result.some(v => v) ? type + '|' + result.join('|') : null;
+                }
+
+                // First pass: collect all sheets and detect format
+                const sheetData = {}; // sheetNorm -> { headers, rows }
+                wb.SheetNames.forEach(sheetName => {
+                  const ws = wb.Sheets[sheetName];
+                  const rows = XLSX.utils.sheet_to_json(ws, { header: 1, defval: '' });
+                  const sheetNorm = normalizeSheet(sheetName);
+                  if (validTypes.has(sheetNorm)) {
+                    isTableFormat = true;
+                    const headers = rows[0] ? rows[0].map(h => String(h).trim()) : [];
+                    sheetData[sheetNorm] = { headers, rows: rows.slice(1) };
+                  } else {
+                    // Raw pipe-delimited cells in column A — process immediately
+                    rows.forEach(row => {
+                      const cell = String(row[0] || '').trim();
+                      if (!cell) return;
+                      const recType = cell.split('|')[0].trim().toUpperCase();
+                      if (validTypes.has(recType)) lines.push(cell);
+                    });
+                  }
+                });
+
+                if (isTableFormat) {
+                  const sheetOrder = ['PATIENT','ENCOUNTER','CHIEF_COMPLAINT','SYMPTOM','DIAGNOSIS','PROCEDURE','MEDICATION','ALLERGY','LAB_RESULT','VITAL','IMMUNIZATION','NK1','INSURANCE','LAB_ORDER','CLINICAL_NOTE'];
+
+                  // Find which header column is the patient identifier (Patient Name / DOB)
+                  const PATIENT_NAME_ALIASES = ['patient name','full name','patient','name'];
+                  const DOB_ALIASES = ['dob','date of birth','dateofbirth','birth date','birthdate'];
+                  function findPatientIdCols(headers) {
+                    let nameIdx = -1, dobIdx = -1;
+                    headers.forEach((h, i) => {
+                      const hl = String(h).toLowerCase().trim();
+                      if (nameIdx === -1 && PATIENT_NAME_ALIASES.includes(hl)) nameIdx = i;
+                      if (dobIdx === -1 && DOB_ALIASES.includes(hl)) dobIdx = i;
+                    });
+                    return { nameIdx, dobIdx };
+                  }
+
+                  // Build ordered patient list from PATIENT sheet (1 row per patient)
+                  const patientSheet = sheetData['PATIENT'];
+                  const patientList = []; // [{name, dob, row}]
+                  if (patientSheet) {
+                    const { nameIdx, dobIdx } = findPatientIdCols(patientSheet.headers);
+                    patientSheet.rows.forEach(row => {
+                      if (!row.some(c => String(c).trim())) return; // skip empty rows
+                      const name = nameIdx >= 0 ? String(row[nameIdx] || '').trim() : '';
+                      const dob  = dobIdx  >= 0 ? String(row[dobIdx]  || '').trim() : '';
+                      patientList.push({ name, dob, row });
+                    });
+                  }
+
+                  // For each patient, output PATIENT line then all their rows from each sheet
+                  const allTypes = [...sheetOrder, ...Object.keys(sheetData).filter(t => !sheetOrder.includes(t))];
+                  patientList.forEach(patient => {
+                    allTypes.forEach(type => {
+                      const sheet = sheetData[type];
+                      if (!sheet) return;
+
+                      if (type === 'PATIENT') {
+                        // One PATIENT line per patient
+                        const line = mapRowToEhr(type, sheet.headers, patient.row);
+                        if (line) lines.push(line);
+                        return;
+                      }
+
+                      // Find identifier columns in this sheet
+                      const { nameIdx, dobIdx } = findPatientIdCols(sheet.headers);
+
+                      if (nameIdx >= 0 || dobIdx >= 0) {
+                        // Filter rows where patient name and/or DOB matches
+                        sheet.rows.forEach(row => {
+                          if (!row.some(c => String(c).trim())) return;
+                          const rowName = nameIdx >= 0 ? String(row[nameIdx] || '').trim() : '';
+                          const rowDob  = dobIdx  >= 0 ? String(row[dobIdx]  || '').trim() : '';
+                          const nameMatch = patient.name && rowName ? rowName === patient.name : true;
+                          const dobMatch  = patient.dob  && rowDob  ? rowDob  === patient.dob  : true;
+                          if (nameMatch && dobMatch && (rowName === patient.name || rowDob === patient.dob)) {
+                            const line = mapRowToEhr(type, sheet.headers, row);
+                            if (line) lines.push(line);
+                          }
+                        });
+                      } else {
+                        // No identifier columns — fall back to same row index as patient
+                        const idx = patientList.indexOf(patient);
+                        const row = sheet.rows[idx];
+                        if (row) {
+                          const line = mapRowToEhr(type, sheet.headers, row);
+                          if (line) lines.push(line);
+                        }
+                      }
+                    });
+                  });
+                }
+
+                // Store format flag for download button logic
+                window._ehrExcelIsTableFormat = isTableFormat;
+                resolve(lines.join('\n'));
+              } catch (err) { reject(err); }
+            };
+            reader.onerror = () => reject(new Error('Failed to read file'));
+            reader.readAsArrayBuffer(uploadedFile);
+          });
+        } else {
+          text = await new Promise((resolve, reject) => {
+            const reader = new FileReader();
+            reader.onload = e => resolve(e.target.result.trim());
+            reader.onerror = () => reject(new Error('Failed to read file'));
+            reader.readAsText(uploadedFile);
+          });
+        }
       } catch (e) {
         showError('Failed to read uploaded file: ' + e.message, []);
         return;
@@ -684,10 +941,36 @@ convertBtn.addEventListener('click', async () => {
       showError('Please paste raw EHR data or upload a file.', []);
       return;
     }
-    if (aiModeEnabled) {
-      await aiConvertEhrToFhir(text);
+
+    // Strip label/comment lines (✅ EHR MESSAGE ..., # comments, blank lines with only symbols)
+    const validEhrTypes = new Set(['PATIENT','ENCOUNTER','ALLERGY','DIAGNOSIS','LAB_ORDER','LAB_RESULT','VITAL','IMMUNIZATION','INSURANCE','NK1','CHIEF_COMPLAINT','SYMPTOM','PROCEDURE','MEDICATION','CLINICAL_NOTE']);
+    const cleanedLines = text.split('\n').filter(line => {
+      const trimmed = line.trim();
+      if (!trimmed) return false;
+      if (trimmed.startsWith('#')) return false;
+      const recType = trimmed.split('|')[0].trim().toUpperCase();
+      return validEhrTypes.has(recType);
+    });
+    const cleanedText = cleanedLines.join('\n');
+    if (!cleanedText) {
+      showError('No valid EHR records found after filtering.', []);
+      return;
+    }
+
+    // Count PATIENT lines — multi-patient EHR must use local converter (AI mixes data between patients)
+    const patientCount = cleanedLines.filter(l => l.trim().split('|')[0].trim().toUpperCase() === 'PATIENT').length;
+    const isMultiPatient = patientCount > 1;
+
+    if (aiModeEnabled && isMultiPatient) {
+      // Show notice but still convert locally
+      const noticeBanner = document.getElementById('ai-active-banner');
+      if (noticeBanner) { noticeBanner.textContent = `⚠ Multi-patient EHR (${patientCount} patients) — using local converter for accuracy`; noticeBanner.classList.remove('hidden'); }
+    }
+
+    if (aiModeEnabled && !isMultiPatient) {
+      await aiConvertEhrToFhir(cleanedText);
     } else {
-      await localConvertEhrToFhir(text);
+      await localConvertEhrToFhir(cleanedText);
     }
     return;
   }
@@ -1120,11 +1403,12 @@ function handleResult(result) {
   const hl7outEl = document.getElementById('hl7out-output');
   if (hl7outEl) hl7outEl.textContent = result.hl7_output ? result.hl7_output.replace(/\r/g, '\n') : '';
 
-  // Hide CSV/Excel buttons for FHIR→HL7 (output is HL7 text, not a FHIR bundle)
+  // Hide CSV/Excel for FHIR→HL7; hide Excel only for table-format Excel EHR input
   const csvBtn = document.getElementById('btn-dl-csv');
   const excelBtn = document.getElementById('btn-dl-excel');
+  const isTableExcelInput = isEhrToFhir && (window._ehrExcelIsTableFormat === true);
   if (csvBtn) csvBtn.classList.toggle('hidden', isFhirToHl7);
-  if (excelBtn) excelBtn.classList.toggle('hidden', isFhirToHl7);
+  if (excelBtn) excelBtn.classList.toggle('hidden', isFhirToHl7 || isTableExcelInput);
 
   // Show/hide mappings tab based on direction and content
   const mappingsTab = document.getElementById('out-tab-mappings');
@@ -1792,35 +2076,27 @@ function exportDataToSpreadsheet(format, filename) {
   });
 
   if (format === 'csv') {
-    // CSV doesn't support tabs natively. We'll generate a ZIP file containing multiple CSVs!
+    // Build CSV from the workbook sheets already populated above
+    if (wb.SheetNames.length === 1) {
+      // Single sheet — direct CSV download
+      const csvStr = XLSX.utils.sheet_to_csv(wb.Sheets[wb.SheetNames[0]]);
+      downloadFile(csvStr, filename.replace('.zip', '.csv'), "text/csv");
+      return;
+    }
+    // Multiple sheets — zip them
     if (!window.JSZip) {
       alert("ZIP library is not loaded. Cannot export multiple CSVs.");
       return;
     }
-    
-    // Check if we strictly only have one sheet to avoid zipping unnecessarily
-    const sheetEntries = Object.entries(sheets);
-    if (sheetEntries.length === 1) {
-      // Direct CSV download for a single resource
-      const [rt, rows] = sheetEntries[0];
-      const ws = XLSX.utils.json_to_sheet(rows);
-      const csvStr = XLSX.utils.sheet_to_csv(ws);
-      downloadFile(csvStr, `${rt}.csv`, "text/csv");
-      return;
-    }
-
     const zip = new JSZip();
-    for (const [rt, rows] of sheetEntries) {
-      const ws = XLSX.utils.json_to_sheet(rows);
-      const csvStr = XLSX.utils.sheet_to_csv(ws);
-      zip.file(`${rt}.csv`, csvStr);
-    }
-    
+    wb.SheetNames.forEach(sheetName => {
+      const csvStr = XLSX.utils.sheet_to_csv(wb.Sheets[sheetName]);
+      zip.file(`${sheetName}.csv`, csvStr);
+    });
     zip.generateAsync({ type: "blob" }).then(function(content) {
       const url = URL.createObjectURL(content);
       const link = document.createElement("a");
       link.href = url;
-      // Change filename ending to .zip
       link.download = filename.replace('.csv', '.zip');
       document.body.appendChild(link);
       link.click();
