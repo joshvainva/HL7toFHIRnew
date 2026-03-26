@@ -1484,12 +1484,13 @@ function handleResult(result) {
     const table = document.createElement('table');
     table.className = 'mapping-table';
 
+    const isEhr = result.direction === 'ehr_to_fhir';
     const thead = document.createElement('thead');
     thead.innerHTML = `
       <tr>
         <th style="width:20%">FHIR Field</th>
-        <th style="width:15%">HL7 Segment.Field</th>
-        <th style="width:35%">HL7 Value</th>
+        <th style="width:15%">${isEhr ? 'EHR Record.Field' : 'HL7 Segment.Field'}</th>
+        <th style="width:35%">${isEhr ? 'EHR Value' : 'HL7 Value'}</th>
         <th style="width:30%">Description</th>
       </tr>
     `;
@@ -1567,7 +1568,7 @@ function renderPDFPreview(result) {
     html += `<div class="pdf-prev-section"><div class="pdf-prev-section-title">${escapeHtml(rm.resource_type)} — ${escapeHtml(rm.resource_id)}</div>
       <table class="pdf-prev-table pdf-mapping-table" style="table-layout:fixed;width:100%">
         <colgroup><col style="width:20%"><col style="width:15%"><col style="width:35%"><col style="width:30%"></colgroup>
-        <thead><tr><th>FHIR Field</th><th>HL7 Segment.Field</th><th>HL7 Value</th><th>Description</th></tr></thead><tbody>`;
+        <thead><tr><th>FHIR Field</th><th>${currentResult && currentResult.direction === 'ehr_to_fhir' ? 'EHR Record.Field' : 'HL7 Segment.Field'}</th><th>${currentResult && currentResult.direction === 'ehr_to_fhir' ? 'EHR Value' : 'HL7 Value'}</th><th>Description</th></tr></thead><tbody>`;
     (rm.field_mappings || []).forEach(f => {
       html += `<tr>
         <td class="mono" style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${escapeHtml(f.fhir_field)}</td>
@@ -1689,7 +1690,12 @@ window.generatePDF = function() {
       headStyles: { fillColor: [51, 102, 204], textColor: 255, fontStyle: 'bold', fontSize: 7.5, halign: 'left' },
       bodyStyles: { fontSize: 7, valign: 'top', overflow: 'linebreak' },
       alternateRowStyles: { fillColor: [245, 247, 255] },
-      head: [['FHIR Field', 'HL7 Segment.Field', 'HL7 Value', 'Description']],
+      head: [[
+        'FHIR Field',
+        currentResult && currentResult.direction === 'ehr_to_fhir' ? 'EHR Record.Field' : 'HL7 Segment.Field',
+        currentResult && currentResult.direction === 'ehr_to_fhir' ? 'EHR Value' : 'HL7 Value',
+        'Description'
+      ]],
       body: (rm.field_mappings || []).map(f => [
         f.fhir_field,
         `${f.hl7_segment}  ${f.hl7_field}`,
