@@ -1,0 +1,284 @@
+================================================================================
+  INNOVA SOLUTIONS — 2026 AI HACKATHON
+  Case Study No. CS06
+  "FHIR Converter — Agentic Code Generation"
+  Business Context Document
+================================================================================
+  Presenters: Sanjivi Syamsundar, Joshva Koilraj, Pavan Kandula, Gayathri Paladugu
+  Date: March 2026
+================================================================================
+
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+1. THE PROBLEM — WHY THIS APPLICATION EXISTS
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+Healthcare data lives in silos. Hospitals, clinics, labs, and insurance
+providers all store patient information in different formats. The two most
+common formats in use today are:
+
+  • HL7 v2.x  — A 30-year-old pipe-delimited messaging standard still used
+                 by the majority of hospitals and EHR systems worldwide for
+                 real-time clinical events (admissions, lab orders, results,
+                 appointments, etc.)
+
+  • FHIR R4   — The modern, web-friendly standard mandated by the US
+                 government (21st Century Cures Act) for health data exchange,
+                 APIs, and patient access portals.
+
+The gap between these two worlds costs the US healthcare industry billions of
+dollars annually in manual data transformation, integration projects, and
+delayed care decisions. Most healthcare organizations are still running HL7 v2
+internally while being required to expose FHIR APIs externally — creating a
+permanent, painful translation layer.
+
+EHR systems (Epic, Cerner, Meditech, Allscripts, etc.) export patient data in
+proprietary flat-file or spreadsheet formats that require custom mapping work
+before they can be used in any FHIR-compliant workflow.
+
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+2. OUR SOLUTION — WHAT THE APPLICATION DOES
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+The HL7 & EHR → FHIR Converter is a full-stack, production-ready web
+application built by Innova Solutions that eliminates the manual effort of
+healthcare data transformation.
+
+It accepts healthcare data in any common format, converts it intelligently
+using rule-based logic or AI, and delivers standards-compliant FHIR R4 output
+that any modern health system can consume.
+
+  KEY VALUE PROPOSITION:
+  ┌─────────────────────────────────────────────────────────────────────────┐
+  │  What used to take weeks of custom integration work now takes seconds.  │
+  └─────────────────────────────────────────────────────────────────────────┘
+
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+3. CONVERSION CAPABILITIES
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+3A. HL7 v2.x → FHIR R4
+───────────────────────
+  Supported Message Types:
+    ADT  (Admit / Discharge / Transfer)
+    ORM  (Order Messages — Lab, Radiology)
+    ORU  (Observation Results — Lab results, vitals)
+    SIU  (Scheduling — Appointments)
+    MDM  (Medical Document Management)
+    DFT  (Detailed Financial Transactions / Billing)
+    VXU  (Vaccination Records)
+    MFN  (Master File Notifications)
+    BAR  (Billing Account Records)
+    ACK  (Acknowledgements)
+
+  Auto-detects HL7 version (v2.3 through v2.8+) and event type from the
+  MSH segment — no manual configuration required.
+
+  Input Formats Accepted:
+    .txt  |  .hl7  |  .pipe  |  Plain text paste  |  .docx  |  .csv  |  .xlsx
+
+  Output / Export Formats:
+    FHIR R4 JSON Bundle  |  FHIR R4 XML Bundle  |  Excel (.xlsx)
+    CSV (ZIP archive)    |  PDF Clinical Summary Report
+
+3B. EHR (Raw / Flat-File) → FHIR R4
+─────────────────────────────────────
+  Accepts pipe-delimited EHR exports and table-format Excel files from any
+  vendor (Epic, Cerner, Meditech, Allscripts, athenahealth, eClinicalWorks,
+  NextGen, and others).
+
+  Supported EHR Record Types:
+    PATIENT        |  ENCOUNTER        |  ALLERGY
+    DIAGNOSIS      |  LAB_ORDER        |  LAB_RESULT
+    VITAL          |  IMMUNIZATION     |  INSURANCE
+    NK1            |  CHIEF_COMPLAINT  |  SYMPTOM
+    PROCEDURE      |  MEDICATION       |  CLINICAL_NOTE
+
+  Input Formats Accepted:
+    .xls / .xlsx  |  .csv  |  .docx  |  .json  |  Pipe-delimited text paste
+
+  Excel Table Format: Upload a spreadsheet where each sheet tab is named
+  after an EHR record type. The system automatically matches rows across
+  sheets by Patient Name and Date of Birth — supporting multi-patient files.
+
+3C. FHIR R4 → HL7 v2.x (Reverse Conversion)
+─────────────────────────────────────────────
+  Converts a FHIR R4 Bundle JSON back to a standard HL7 v2.x message —
+  useful for feeding modern data back into legacy hospital systems.
+
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+4. AI-POWERED CONVERSION ENGINE
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+The application offers two conversion modes:
+
+  RULE-BASED MODE (default)
+    Deterministic, instant, no external API calls. Uses hand-crafted segment
+    mappers for every supported HL7 message type. Best for structured,
+    standard-compliant HL7 input.
+
+  AI MODE (optional)
+    Sends data to an AI provider for intelligent, context-aware extraction.
+    Handles non-standard, malformed, or vendor-specific EHR data that
+    rule-based parsers cannot reliably interpret.
+
+    Supported AI Providers:
+      Claude Sonnet 4.6 (Anthropic) — Recommended for accuracy and reliability
+      Llama 3.3 70B via Groq        — Fast, with a free tier available
+
+  Note: Multi-patient batch files always use rule-based conversion to prevent
+  any possibility of data mixing across patients.
+
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+5. PATIENT PRIVACY & PHI PROTECTION
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+Before any data is sent to an external AI provider, the application
+automatically masks all Protected Health Information (PHI):
+
+  • Patient Name (PID-5)           • Date of Birth (PID-7)
+  • Medical Record Number (PID-3)  • Social Security Number (PID-19)
+  • Home Address (PID-11)          • Phone Numbers (PID-13/14)
+  • Next-of-Kin Name & Phone (NK1 fields)
+
+PHI is restored in the displayed output via an "Unmask" button after
+conversion — it is never transmitted to external services in plain text.
+
+This design ensures compliance considerations are addressed at the
+architectural level, not as an afterthought.
+
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+6. THROUGHPUT & PERFORMANCE
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+  Single-message REST API (rule-based):   ~100 messages per minute
+  Batch file upload (async, rule-based):  ~600 messages per minute
+  AI-assisted conversions:                Slightly slower (subject to LLM
+                                          provider response time)
+
+The application is stateless and horizontally scalable — worker count is
+configurable via environment variable (default: 2 workers).
+
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+7. KEY FEATURES AT A GLANCE
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+  [+] Batch file processing       Upload files with multiple messages at once
+  [+] FHIR Validator              Validates every output bundle for R4 compliance
+  [+] Field Mapping Audit Tab     Shows every source field → FHIR resource mapping
+  [+] Conversion History          Last 10 conversions tracked in-session
+  [+] Dark / Light theme          User interface comfort for clinical environments
+  [+] Guided Tour                 Interactive walkthrough for new users
+  [+] REST API + Swagger UI       Available at /docs for programmatic integration
+  [+] Docker-ready                Single command deployment, ~200 MB image
+  [+] Air-gapped deployment       Can run in fully offline / on-premise environments
+
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+8. COMING NEXT — FHIR-COMPLIANT DATABASE INTEGRATION
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+The next major feature on the roadmap is a FHIR-compliant persistent data
+store with intelligent upsert logic:
+
+  SMART UPSERT ENGINE
+    When a FHIR resource is produced, the system will first search the
+    database for an existing record matching the same patient (by MRN),
+    resource type, and relevant date/encounter identifiers.
+
+    If a match is found  → the existing record is UPDATED with new data.
+    If no match is found → a new record is INSERTED.
+
+    This eliminates duplicate patient records — a critical patient safety
+    and data quality issue in healthcare systems today.
+
+  FHIR-NATIVE STORAGE
+    Resources stored natively in FHIR R4 format.
+    Full version history per resource.
+    Complete audit trail of all changes.
+    Conflict resolution logic for concurrent updates.
+    Zero duplicate records guarantee.
+
+  BUSINESS IMPACT
+    Reduces storage costs by eliminating redundant records.
+    Improves clinical decision making with a single, accurate patient view.
+    Supports regulatory requirements for data lineage and auditability.
+
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+9. TECHNOLOGY STACK
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+  Backend Framework   Python 3.11+ · FastAPI · Uvicorn
+  HL7 Parsing         python-hl7 · Custom per-message-type converters
+  FHIR Modeling       fhir.resources 7.1.0 (FHIR R4)
+  AI Integration      Anthropic SDK (Claude Sonnet 4.6) · Groq SDK (Llama 3.3 70B)
+  Data Validation     Pydantic v2
+  File Handling       openpyxl · xlrd · python-docx · lxml
+  Frontend            Vanilla JS · CSS3 (Dark/Light themes)
+  Export              jsPDF (PDF) · SheetJS (Excel) · JSZip (CSV archives)
+  Container           Docker multi-stage build · non-root user · ~200 MB image
+
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+10. DEPLOYMENT & ACCESS
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+  Web UI:         http://localhost:8000
+  API Docs:       http://localhost:8000/docs
+  Health Check:   http://localhost:8000/api/health
+
+  Deployment Options:
+    A. Docker Compose (recommended)   — docker compose up --build
+    B. Docker Hub                     — docker pull joshvainva/hl7-fhir-converter
+    C. Air-gapped / offline           — docker save / docker load
+    D. Local Python                   — uvicorn app.main:app --port 8000
+
+  Minimum System Requirements:
+    CPU: 1 core (2+ recommended)
+    RAM: 512 MB (1 GB recommended)
+    Disk: 1 GB
+    OS:  Linux / Windows / macOS
+
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+11. WHO BENEFITS FROM THIS APPLICATION
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+  Healthcare IT Teams       Accelerate EHR integration projects from weeks to hours.
+  Health Information Mgmt   Convert and validate patient records without coding.
+  Integration Engineers     Use the REST API to embed conversion in any pipeline.
+  Clinical Informaticists   Audit field-level mappings and validate FHIR compliance.
+  Compliance Officers       PHI masking ensures safe handling before AI processing.
+  Developers / Innovators   Build FHIR-powered applications on top of the API.
+
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+12. SUMMARY
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+The Innova Solutions FHIR Converter bridges the legacy and modern worlds of
+healthcare data. It is not a prototype — it is a production-ready platform
+that handles real clinical message types, protects patient privacy, scales to
+enterprise workloads, and deploys in minutes.
+
+By combining deterministic rule-based conversion with the intelligence of
+large language models, it handles the full spectrum of healthcare data quality —
+from perfectly structured HL7 messages to messy, vendor-specific EHR exports.
+
+The roadmap towards a FHIR-compliant database with smart upsert logic
+positions this platform to become a complete healthcare data hub — not just
+a converter, but the authoritative source of truth for patient records across
+an organization.
+
+================================================================================
+  Built by Innova Solutions — 2026 AI Hackathon  |  Case Study No. CS06
+  1455 Lincoln Parkway East, 8th Floor, Atlanta, GA 30346
+  www.innovasolutions.com
+================================================================================
