@@ -1184,23 +1184,24 @@ let outputIsUnmasked = false;
 // otherwise returns the original (masked) FHIR JSON.
 function getEffectiveFhirJson() {
   if (!currentResult || !currentResult.fhir_json) return null;
-  if (!outputIsUnmasked || !phiMap) return currentResult.fhir_json;
-  try {
-    return JSON.parse(applyPhiRestore(JSON.stringify(currentResult.fhir_json)));
-  } catch {
-    return currentResult.fhir_json;
+  let bundle = currentResult.fhir_json;
+  if (outputIsUnmasked && phiMap) {
+    try {
+      bundle = JSON.parse(applyPhiRestore(JSON.stringify(currentResult.fhir_json)));
+    } catch (e) {
+      console.warn("Failed to restore PHI for cleaning:", e);
+    }
   }
+  return cleanBundleForDisplay(bundle);
 }
 
 window.toggleUnmask = function() {
   if (!phiMap || !currentResult) return;
   outputIsUnmasked = !outputIsUnmasked;
 
-  const rawJson = JSON.stringify(currentResult.fhir_json, null, 2);
-  const display = outputIsUnmasked ? applyPhiRestore(rawJson) : rawJson;
-
+  const display = getEffectiveFhirJson();
   const jsonEl = document.getElementById('json-output');
-  if (jsonEl) jsonEl.innerHTML = syntaxHighlightJson(display);
+  if (jsonEl) jsonEl.innerHTML = syntaxHighlightJson(JSON.stringify(display, null, 2));
 
   const btn = document.getElementById('unmask-btn');
   if (btn) {
@@ -1446,7 +1447,8 @@ function handleResult(result) {
   }
 
   // JSON
-  const jsonStr = JSON.stringify(result.fhir_json, null, 2);
+  const displayJson = getEffectiveFhirJson();
+  const jsonStr = JSON.stringify(displayJson, null, 2);
   jsonOutput.innerHTML = syntaxHighlightJson(jsonStr);
 
   // XML
@@ -2406,38 +2408,40 @@ function renderHistory() {
  */
 function cleanBundleForDisplay(bundle) {
   if (!bundle) return bundle;
+  console.log("CLEANING_JSON_V3 - Running...");
   const clean = JSON.parse(JSON.stringify(bundle));
   
-  // Recursively remove "system" keys and synthetic UUID-based IDs
   const sanitize = (obj) => {
+    if (!obj || typeof obj !== 'object') return;
+    
     if (Array.isArray(obj)) {
       obj.forEach(sanitize);
-    } else if (obj !== null && typeof obj === 'object') {
-      // 1. Remove "system" key as requested
-      if ('system' in obj) delete obj.system;
-      
-      // 2. Remove UUID-like IDs (synthetic database primary keys)
-      if (obj.resourceType && obj.id && /^[0-9a-f]{8,}$/i.test(obj.id)) {
-        delete obj.id;
-      }
-      
-      // 3. Remove metadata if it's just profile references
-      if (obj.meta) {
-        const metaKeys = Object.keys(obj.meta).filter(k => k !== 'profile');
-        if (metaKeys.length === 0) delete obj.meta;
-      }
-      
-      // Keep traversing
-      Object.values(obj).forEach(sanitize);
+      return;
     }
+
+    // Unconditionally remove internal IDs from FHIR resources 
+    // (since human-readable MRNs are in the 'identifier' array)
+    if (obj.resourceType && obj.id) {
+       console.log("Stripping ID from", obj.resourceType);
+       delete obj.id;
+    }
+
+    // Remove technical metadata
+    if (obj.meta) {
+       delete obj.meta;
+    }
+
+    // Recurse
+    Object.values(obj).forEach(sanitize);
   };
 
+  // Clean top-level Bundle ID
   delete clean.id;
+  
   if (Array.isArray(clean.entry)) {
-    clean.entry = clean.entry.map(e => {
+    clean.entry.forEach(e => {
       delete e.fullUrl;
       if (e.resource) sanitize(e.resource);
-      return e;
     });
   }
   return clean;
@@ -2515,7 +2519,8 @@ function downloadHistoryOutput(itemId, format) {
   let mimeType = '';
 
   if (format === 'json') {
-    content = JSON.stringify(item.fhir_json, null, 2);
+    const clean = cleanBundleForDisplay(item.fhir_json);
+    content = JSON.stringify(clean, null, 2);
     filename = `fhir_bundle_${item.id}.json`;
     mimeType = 'application/json';
   } else if (format === 'xml') {

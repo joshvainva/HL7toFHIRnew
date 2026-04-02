@@ -1,0 +1,397 @@
+{
+  "results": [
+    {
+      "patient_mrn": "MRN-4002",
+      "patient_name": "Sarah Johnson",
+      "patient_data": {
+        "id": "MRN-4002",
+        "name": [
+          {
+            "use": "official",
+            "given": [
+              "Sarah"
+            ],
+            "family": "Johnson"
+          }
+        ],
+        "gender": "female",
+        "address": [
+          {
+            "use": "home",
+            "city": "IL",
+            "line": [
+              "Chicago"
+            ],
+            "state": "60616",
+            "country": "US",
+            "postalCode": ""
+          }
+        ],
+        "telecom": [
+          {
+            "use": "home",
+            "value": "312-555-4022",
+            "system": "phone"
+          }
+        ],
+        "birthDate": "1992-04-12",
+        "identifier": [
+          {
+            "type": {
+              "coding": [
+                {
+                  "code": "MR"
+                }
+              ]
+            },
+            "value": "MRN-4002",
+            "system": "urn:oid:local:mrn"
+          }
+        ],
+        "resourceType": "Patient",
+        "communication": [
+          {
+            "language": {
+              "coding": [
+                {
+                  "code": "en",
+                  "system": "urn:ietf:bcp:47"
+                }
+              ]
+            },
+            "preferred": true
+          }
+        ]
+      },
+      "conversions": [
+        {
+          "log_id": "bd50d7d3-5813-4776-bfda-55ac46ccdd1f",
+          "message_type": "ORU",
+          "conversion_source": "EHR\u2192FHIR",
+          "converted_at": "2026-04-02T02:44:19.556254",
+          "warnings": [],
+          "dq_issues": [],
+          "success": "success"
+        }
+      ]
+    },
+    {
+      "patient_mrn": "MRN-4004",
+      "patient_name": "Emily Turner",
+      "patient_data": {
+        "id": "MRN-4004",
+        "name": [
+          {
+            "use": "official",
+            "given": [
+              "Emily"
+            ],
+            "family": "Turner"
+          }
+        ],
+        "gender": "female",
+        "address": [
+          {
+            "use": "home",
+            "city": "OR",
+            "line": [
+              "Portland"
+            ],
+            "state": "97206",
+            "country": "US",
+            "postalCode": ""
+          }
+        ],
+        "telecom": [
+          {
+            "use": "home",
+            "value": "503-555-4044",
+            "system": "phone"
+          }
+        ],
+        "birthDate": "2001-11-03",
+        "identifier": [
+          {
+            "type": {
+              "coding": [
+                {
+                  "code": "MR"
+                }
+              ]
+            },
+            "value": "MRN-4004",
+            "system": "urn:oid:local:mrn"
+          }
+        ],
+        "resourceType": "Patient",
+        "communication": [
+          {
+            "language": {
+              "coding": [
+                {
+                  "code": "en",
+                  "system": "urn:ietf:bcp:47"
+                }
+              ]
+            },
+            "preferred": true
+          }
+        ]
+      },
+      "conversions": [
+        {
+          "log_id": "836c8de0-9791-4d92-bef2-6a3de85b389e",
+          "message_type": "ORU",
+          "conversion_source": "EHR\u2192FHIR",
+          "converted_at": "2026-04-02T02:44:19.556254",
+          "warnings": [],
+          "dq_issues": [],
+          "success": "success"
+        }
+      ]
+    },
+    {
+      "patient_mrn": "MRN-4005",
+      "patient_name": "David Kim",
+      "patient_data": {
+        "id": "MRN-4005",
+        "name": [
+          {
+            "use": "official",
+            "given": [
+              "David"
+            ],
+            "family": "Kim"
+          }
+        ],
+        "gender": "male",
+        "address": [
+          {
+            "use": "home",
+            "city": "CA",
+            "line": [
+              "Los Angeles"
+            ],
+            "state": "90017",
+            "country": "US",
+            "postalCode": ""
+          }
+        ],
+        "telecom": [
+          {
+            "use": "home",
+            "value": "213-555-4055",
+            "system": "phone"
+          }
+        ],
+        "birthDate": "1968-07-15",
+        "identifier": [
+          {
+            "type": {
+              "coding": [
+                {
+                  "code": "MR"
+                }
+              ]
+            },
+            "value": "MRN-4005",
+            "system": "urn:oid:local:mrn"
+          }
+        ],
+        "resourceType": "Patient",
+        "communication": [
+          {
+            "language": {
+              "coding": [
+                {
+                  "code": "ko",
+                  "system": "urn:ietf:bcp:47"
+                }
+              ]
+            },
+            "preferred": true
+          }
+        ]
+      },
+      "conversions": [
+        {
+          "log_id": "10fc6171-7af3-47c9-a129-ed5eb73c6cf5",
+          "message_type": "ORU",
+          "conversion_source": "EHR\u2192FHIR",
+          "converted_at": "2026-04-02T02:44:19.556254",
+          "warnings": [],
+          "dq_issues": [],
+          "success": "success"
+        }
+      ]
+    },
+    {
+      "patient_mrn": "MRN-4001",
+      "patient_name": "Patient1 Lastname1",
+      "patient_data": {
+        "id": "MRN-4001",
+        "name": [
+          {
+            "use": "official",
+            "given": [
+              "Patient1"
+            ],
+            "family": "Lastname1"
+          }
+        ],
+        "gender": "male",
+        "address": [
+          {
+            "use": "home",
+            "city": "TX",
+            "line": [
+              "Dallas"
+            ],
+            "state": "75201",
+            "country": "US",
+            "postalCode": ""
+          }
+        ],
+        "telecom": [
+          {
+            "use": "home",
+            "value": "214-555-4001",
+            "system": "phone"
+          }
+        ],
+        "birthDate": "1980-01-01",
+        "identifier": [
+          {
+            "type": {
+              "coding": [
+                {
+                  "code": "MR"
+                }
+              ]
+            },
+            "value": "MRN-4001",
+            "system": "urn:oid:local:mrn"
+          }
+        ],
+        "resourceType": "Patient",
+        "communication": [
+          {
+            "language": {
+              "coding": [
+                {
+                  "code": "en",
+                  "system": "urn:ietf:bcp:47"
+                }
+              ]
+            },
+            "preferred": true
+          }
+        ]
+      },
+      "conversions": [
+        {
+          "log_id": "282ea339-a9e6-4048-8ea8-621b1d2532fa",
+          "message_type": "ORU",
+          "conversion_source": "EHR\u2192FHIR",
+          "converted_at": "2026-04-02T02:44:19.556254",
+          "warnings": [],
+          "dq_issues": [],
+          "success": "success"
+        },
+        {
+          "log_id": "02278ef6-f06e-4417-97fd-ea69defaad37",
+          "message_type": "ORU",
+          "conversion_source": "EHR\u2192FHIR",
+          "converted_at": "2026-04-02T02:18:29.315886",
+          "warnings": [],
+          "dq_issues": [],
+          "success": "success"
+        },
+        {
+          "log_id": "b974baee-b228-41fe-b70a-814e0bcee58a",
+          "message_type": "ORU",
+          "conversion_source": "EHR\u2192FHIR",
+          "converted_at": "2026-04-01T22:47:13.890545",
+          "warnings": [],
+          "dq_issues": [],
+          "success": "success"
+        }
+      ]
+    },
+    {
+      "patient_mrn": "MRN-4003",
+      "patient_name": "Michael Reed",
+      "patient_data": {
+        "id": "MRN-4003",
+        "name": [
+          {
+            "use": "official",
+            "given": [
+              "Michael"
+            ],
+            "family": "Reed"
+          }
+        ],
+        "gender": "male",
+        "address": [
+          {
+            "use": "home",
+            "city": "CO",
+            "line": [
+              "Denver"
+            ],
+            "state": "80205",
+            "country": "US",
+            "postalCode": ""
+          }
+        ],
+        "telecom": [
+          {
+            "use": "home",
+            "value": "720-555-4033",
+            "system": "phone"
+          }
+        ],
+        "birthDate": "1975-09-20",
+        "identifier": [
+          {
+            "type": {
+              "coding": [
+                {
+                  "code": "MR"
+                }
+              ]
+            },
+            "value": "MRN-4003",
+            "system": "urn:oid:local:mrn"
+          }
+        ],
+        "resourceType": "Patient",
+        "communication": [
+          {
+            "language": {
+              "coding": [
+                {
+                  "code": "sp",
+                  "system": "urn:ietf:bcp:47"
+                }
+              ]
+            },
+            "preferred": true
+          }
+        ]
+      },
+      "conversions": [
+        {
+          "log_id": "87956d88-7abf-4e30-9725-5325239a6915",
+          "message_type": "ORU",
+          "conversion_source": "EHR\u2192FHIR",
+          "converted_at": "2026-04-02T02:44:19.556254",
+          "warnings": [],
+          "dq_issues": [],
+          "success": "success"
+        }
+      ]
+    }
+  ]
+}

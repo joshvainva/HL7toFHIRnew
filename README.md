@@ -97,37 +97,42 @@ An **Unmask** button restores original values in the displayed output after conv
 
 ## Quick Start
 
-### Option A — Docker (recommended)
+### Option A — Docker (Recommended)
+
+Docker is the easiest way to run the entire stack (including the database) on any system.
 
 ```bash
-# Clone the repo
+# 1. Clone and enter repo
 git clone https://github.com/joshvainva/HL7toFHIRnew.git
 cd HL7toFHIRnew
 
-# Set up API keys
+# 2. Set up API keys
 cp .env.example .env
 # Edit .env and add your ANTHROPIC_API_KEY and/or GROQ_API_KEY
 
-# Build and run
+# 3. Build and run
 docker compose up --build
 
-# Open browser
-http://localhost:8000
+# Open browser to: http://localhost:8000
 ```
-
-See [DOCKER.md](DOCKER.md) for full Docker instructions.
+*Docker handles all dependencies and the PostgreSQL database setup automatically.*
 
 ### Option B — Local Python
 
+Use this if you want to run the application directly on your machine. **PostgreSQL 14+** must be installed and running.
+
 ```bash
-# Python 3.11+ required
+# 1. Install dependencies
 pip install -r requirements.txt
 
-# Set up environment variables
-cp .env.example .env
-# Edit .env with your API keys
+# 2. Initialize the Database and .env file
+# This script will create the database 'innova_fhir' and update your .env
+python setup_db.py
 
-# Start server
+# 3. Add AI API Keys (Optional)
+# Open .env and add ANTHROPIC_API_KEY for AI-powered conversions.
+
+# 4. Start the server
 uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
 ```
 
