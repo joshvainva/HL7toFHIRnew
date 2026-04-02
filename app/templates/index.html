@@ -207,14 +207,35 @@
 
         <!-- History tab -->
         <div class="tab-content" id="tab-history">
-          <div class="history-controls">
-            <button class="btn btn-secondary" id="refresh-history-btn">🔄 Refresh</button>
-            <button class="btn btn-outline" id="clear-history-btn">🗑 Clear History</button>
+          <div class="history-filters" style="display:flex; flex-direction:column; gap:0.75rem; margin-bottom:1rem;">
+            <div style="display:flex; gap:0.5rem; align-items:center; flex-wrap:wrap;">
+              <select id="hist-time-filter" class="form-select" style="padding:0.4rem; border-radius:4px; border:1px solid var(--border); width:140px;">
+                <option value="1d" selected>Last 1 Day</option>
+                <option value="1w">Last 1 Week</option>
+                <option value="1m">Last 1 Month</option>
+                <option value="1y">Last 1 Year</option>
+                <option value="5y">Last 5 Years</option>
+                <option value="all">All Time</option>
+                <option value="custom">Date Range</option>
+              </select>
+              <div id="hist-date-range-wrap" style="display:none; gap:0.3rem; align-items:center; background:rgba(255,255,255,0.03); padding:2px 8px; border-radius:4px; border:1px solid var(--border);">
+                <span style="font-size:0.75rem; color:var(--text-muted);">Range:</span>
+                <input type="date" id="hist-start-date" class="form-input" style="padding:0.2rem; font-size:0.8rem; width:130px; border:none; background:transparent; color:var(--text);" />
+                <span style="color:var(--text-muted);">→</span>
+                <input type="date" id="hist-end-date" class="form-input" style="padding:0.2rem; font-size:0.8rem; width:130px; border:none; background:transparent; color:var(--text);" />
+              </div>
+              <input type="text" id="hist-name-filter" class="form-input" placeholder="Search Name..." style="flex:1; padding:0.4rem; border-radius:4px; border:1px solid var(--border); background:var(--input-bg); color:var(--text); min-width:200px;" autocomplete="off" />
+              <button class="btn btn-secondary" id="refresh-history-btn" style="padding:0.4rem 0.8rem;" onclick="loadHistory()">🔍 Search</button>
+            </div>
+            <div id="hist-adv-filters" style="display:flex; gap:0.5rem; align-items:center;">
+              <input type="text" id="hist-dob-filter" class="form-input" placeholder="DOB (YYYY-MM-DD)" style="flex:1; padding:0.4rem; border-radius:4px; border:1px solid var(--border); background:var(--input-bg); color:var(--text);" />
+              <input type="text" id="hist-addr-filter" class="form-input" placeholder="Address / City" style="flex:2; padding:0.4rem; border-radius:4px; border:1px solid var(--border); background:var(--input-bg); color:var(--text);" />
+            </div>
           </div>
           <div id="history-list" class="history-list">
             <div class="history-empty">
               <span>📋</span>
-              <p>No conversion history yet. Convert some HL7 messages to see them here.</p>
+              <p>Search for a patient or adjust filters to view their FHIR records.</p>
             </div>
           </div>
         </div>
