@@ -5,8 +5,9 @@ import json
 import logging
 import os
 import uuid
-from datetime import datetime
+from datetime import datetime, timedelta
 from typing import List, Optional
+from sqlalchemy import cast, String
 
 # Load .env so GROQ_API_KEY is available without python-dotenv dependency
 _env_path = os.path.join(os.path.dirname(__file__), "..", "..", ".env")
@@ -34,10 +35,199 @@ from app.core.renderer import (
 from app.core.history import history, HistoryItem
 from app.file_handlers.registry import get_handler
 from app.models.schemas import ConversionResult, ErrorResponse, FHIRConversionRequest, ResourceSummary
+from app.db.session import SessionLocal
+from app.models.db_models import FhirResource, ConversionLog
+from app.core.dq_engine import DQEngine
+from app.core.upsert_engine import SmartUpsertEngine
 
 logger = logging.getLogger(__name__)
 
 router = APIRouter()
+
+def _post_process_bundle(
+    bundle: dict,
+    raw_content: str = "",
+    message_type: str = None,
+    conversion_source: str = None,
+    warnings: list = None,
+    field_mappings: list = None
+) -> tuple:
+    if not bundle:
+        return [], None
+    db = SessionLocal()
+    try:
+        # --- DQ validation ---
+        dq = DQEngine(db)
+        issues = dq.validate_bundle(bundle)
+        dq.record_issues(issues, raw_content)
+
+        # --- Smart upsert (cumulative FHIR resource store) ---
+        upsert = SmartUpsertEngine(db)
+        summary = upsert.upsert_bundle(bundle, message_type=message_type, conversion_source=conversion_source)
+
+        # --- ConversionLog: intelligent splitting ---
+        # We split the bundle so each audit entry only contains resources related to that specific patient.
+        logs_to_create = []
+        patient_resources = {} # mrn -> list of resource-entries
+        
+        # 1. Identify all patients first
+        all_patients = []
+        for entry in bundle.get("entry", []):
+            res = entry.get("resource", {})
+            if res.get("resourceType") == "Patient":
+                mrn = None
+                for ident in res.get("identifier", []):
+                    if ident.get("value"): mrn = ident["value"]; break
+                if not mrn: mrn = res.get("id")
+                
+                name = None
+                names = res.get("name", [])
+                if names:
+                    n = names[0]
+                    gn = " ".join(n.get("given", []))
+                    fn = n.get("family", "")
+                    name = f"{gn} {fn}".strip()
+                
+                patient_info = {"mrn": mrn or "UNKNOWN", "name": name, "res_id": res.get("id")}
+                all_patients.append(patient_info)
+                patient_resources[patient_info["mrn"]] = [entry]
+
+        if not all_patients:
+            # Fallback for non-patient bundles (unlikely in EHR/HL7 context)
+            logs_to_create.append({"mrn": "UNKNOWN", "name": None, "bundle": bundle})
+        else:
+            # 2. Assign other resources to their respective patients based on references
+            # Build maps for intelligent partitioning
+            enc_to_pat = {}
+            prac_to_pats = {} # PractitionerID -> set of PatientMRNs
+            
+            # First pass: Build Encounter and Practitioner relationship maps
+            for entry in bundle.get("entry", []):
+                res = entry.get("resource", {})
+                rt = res.get("resourceType")
+                if rt == "Encounter":
+                    pat_mrn = None
+                    ref = res.get("subject", {}).get("reference", "")
+                    if ref.startswith("Patient/"):
+                        p_id = ref.split("/")[-1]
+                        # Find the MRN for this patient ID
+                        for p in all_patients:
+                            if p["res_id"] == p_id or p["mrn"] == p_id:
+                                pat_mrn = p["mrn"]
+                                break
+                    
+                    if pat_mrn:
+                        enc_to_pat[res.get("id")] = pat_mrn
+                        # Map practitioners from this encounter to this patient
+                        for part in res.get("participant", []):
+                            indiv_ref = part.get("individual", {}).get("reference", "")
+                            if indiv_ref.startswith("Practitioner/"):
+                                prac_id = indiv_ref.split("/")[-1]
+                                if prac_id not in prac_to_pats:
+                                    prac_to_pats[prac_id] = set()
+                                prac_to_pats[prac_id].add(pat_mrn)
+
+            # Second pass: Partition all resources into patient buckets
+            for entry in bundle.get("entry", []):
+                res = entry.get("resource", {})
+                rt = res.get("resourceType")
+                if rt == "Patient": continue # already handled
+                
+                # Identify which patients this resource belongs to
+                target_mrns = []
+                
+                # Check direct subject/patient reference
+                ref = (res.get("subject") or res.get("patient") or {}).get("reference", "")
+                if ref.startswith("Patient/"):
+                    p_id = ref.split("/")[-1]
+                    # Find MRN
+                    for p in all_patients:
+                        if p["res_id"] == p_id or p["mrn"] == p_id:
+                            target_mrns.append(p["mrn"])
+                            break
+                elif ref.startswith("Encounter/"):
+                    enc_id = ref.split("/")[-1]
+                    if enc_id in enc_to_pat:
+                        target_mrns.append(enc_to_pat[enc_id])
+                elif rt == "Practitioner":
+                    # Use practitioner map
+                    prac_id = res.get("id")
+                    if prac_id in prac_to_pats:
+                        target_mrns.extend(list(prac_to_pats[prac_id]))
+                elif rt == "Organization":
+                    # Organizations (like sending facility) are often shared across the whole batch
+                    for p in all_patients:
+                        target_mrns.append(p["mrn"])
+
+                # Add to buckets
+                if target_mrns:
+                    for mrn in target_mrns:
+                        if mrn in patient_resources:
+                            patient_resources[mrn].append(entry)
+                else:
+                    # If orphan and no direct link, attach to the first patient found as fallback
+                    # This handles edge cases where resources are not correctly linked in the source
+                    if all_patients:
+                        patient_resources[all_patients[0]["mrn"]].append(entry)
+
+            for p in all_patients:
+                logs_to_create.append({
+                    "mrn": p["mrn"],
+                    "name": p["name"],
+                    "bundle": {
+                        "resourceType": "Bundle",
+                        "type": "collection",
+                        "entry": patient_resources.get(p["mrn"], [])
+                    }
+                })
+
+        # 3. Save logs
+        # Ensure all nested objects are plain dicts for JSONB serialization
+        serializable_mappings = []
+        if field_mappings:
+            for m in field_mappings:
+                if hasattr(m, "dict"):
+                    serializable_mappings.append(m.dict())
+                else:
+                    serializable_mappings.append(m)
+
+        serializable_dq = []
+        if issues:
+            for i in issues:
+                if isinstance(i, dict):
+                    # Strip SQLAlchemy state if present
+                    if "_sa_instance_state" in i:
+                        i = {k: v for k, v in i.items() if k != "_sa_instance_state"}
+                    serializable_dq.append(i)
+                elif hasattr(i, "__dict__"):
+                    d = {k: v for k, v in vars(i).items() if k != "_sa_instance_state"}
+                    serializable_dq.append(d)
+                else:
+                    serializable_dq.append(str(i))
+
+        for log_data in logs_to_create:
+            log_entry = ConversionLog(
+                id=str(uuid.uuid4()),
+                patient_mrn=log_data["mrn"],
+                patient_name=log_data["name"],
+                message_type=message_type,
+                conversion_source=conversion_source or "Unknown",
+                fhir_bundle=log_data["bundle"],
+                field_mappings=serializable_mappings,
+                raw_input=raw_content[:16000] if raw_content else None,
+                warnings=warnings or [],
+                dq_issues=serializable_dq,
+                success="success",
+            )
+            db.add(log_entry)
+        
+        db.commit()
+        return issues, summary
+    except Exception as e:
+        logger.error(f"Post-process error: {e}")
+        return [], None
+    finally:
+        db.close()
 
 # Shared service instances (stateless — safe to reuse)
 _parser = HL7Parser()
@@ -122,6 +312,15 @@ def _process_hl7_text(raw_message: str, input_type: str = "text", input_name: Op
     # 5. Build summary
     summaries = build_resource_summary(bundle)
 
+    dq_issues, upsert_summary = _post_process_bundle(
+        bundle,
+        raw_message,
+        message_type=f"{parsed.message_type}{'~'+parsed.message_event if parsed.message_event else ''}",
+        conversion_source="HL7→FHIR",
+        warnings=validation.warnings + mapping_warnings,
+        field_mappings=field_mappings
+    )
+
     result = ConversionResult(
         success=True,
         hl7_version=parsed.version,
@@ -133,6 +332,8 @@ def _process_hl7_text(raw_message: str, input_type: str = "text", input_name: Op
         resource_summary=summaries,
         field_mappings=field_mappings,
         warnings=validation.warnings + mapping_warnings,
+        dq_issues=dq_issues,
+        upsert_summary=upsert_summary,
     )
 
     # Save successful conversion to history
@@ -339,6 +540,15 @@ async def ai_convert_hl7_to_fhir(payload: dict):
 
     # Save to history
     if result.get("success"):
+        dq_issues, upsert_summary = _post_process_bundle(
+            result.get("fhir_json"), raw,
+            message_type=result.get("message_type"),
+            conversion_source="HL7→FHIR (AI)",
+            field_mappings=result.get("field_mappings")
+        )
+        result["dq_issues"] = dq_issues
+        result["upsert_summary"] = upsert_summary
+
         history_item = HistoryItem(
             id=str(uuid.uuid4()),
             timestamp=datetime.now().isoformat(),
@@ -425,6 +635,15 @@ async def convert_ehr_to_fhir(payload: dict):
         raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(exc))
 
     if result.get("success"):
+        dq_issues, upsert_summary = _post_process_bundle(
+            result.get("fhir_json"), raw,
+            message_type=result.get("message_type", "EHR"),
+            conversion_source="EHR→FHIR",
+            field_mappings=result.get("field_mappings")
+        )
+        result["dq_issues"] = dq_issues
+        result["upsert_summary"] = upsert_summary
+        
         # Build XML via existing renderer
         try:
             result["fhir_xml"] = to_fhir_xml(result["fhir_json"])
@@ -471,6 +690,15 @@ async def ai_convert_ehr_to_fhir(payload: dict):
         raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(exc))
 
     if result.get("success"):
+        dq_issues, upsert_summary = _post_process_bundle(
+            result.get("fhir_json"), raw,
+            message_type=result.get("message_type", "EHR"),
+            conversion_source="EHR→FHIR (AI)",
+            field_mappings=result.get("field_mappings")
+        )
+        result["dq_issues"] = dq_issues
+        result["upsert_summary"] = upsert_summary
+        
         history_item = HistoryItem(
             id=str(uuid.uuid4()),
             timestamp=datetime.now().isoformat(),
@@ -542,3 +770,207 @@ async def clear_history():
     """Clear all conversion history."""
     history.clear()
     return {"message": "History cleared"}
+
+
+@router.get(
+    "/history/db/search",
+    summary="Search conversion history — one entry per conversion event, grouped by patient",
+)
+def search_history(
+    time_filter: str = "1d",
+    name: Optional[str] = None,
+    dob: Optional[str] = None,
+    address: Optional[str] = None,
+    start_date: Optional[str] = None,
+    end_date: Optional[str] = None
+):
+    db = SessionLocal()
+    try:
+        from sqlalchemy import text as sa_text, cast, String, or_, Text
+        query = db.query(ConversionLog)
+
+        # 1. Date Range & Time Filter
+        now = datetime.utcnow()
+        if time_filter == "custom" and (start_date or end_date):
+            if start_date:
+                try:
+                    s_dt = datetime.fromisoformat(start_date.replace('Z', '+00:00'))
+                    query = query.filter(ConversionLog.converted_at >= s_dt)
+                except: pass
+            if end_date:
+                try:
+                    e_dt = datetime.fromisoformat(end_date.replace('Z', '+00:00'))
+                    if e_dt.hour == 0 and e_dt.minute == 0:
+                        e_dt = e_dt + timedelta(days=1)
+                    query = query.filter(ConversionLog.converted_at <= e_dt)
+                except: pass
+        elif time_filter != "all":
+            # Traditional quick filters
+            days_map = {"1d": 1, "1w": 7, "1m": 30, "1y": 365, "5y": 1825}
+            if time_filter in days_map:
+                query = query.filter(ConversionLog.converted_at >= now - timedelta(days=days_map[time_filter]))
+
+        # Diagnostic Log
+        print(f"Audit Search: time={time_filter}, name={name}, dob={dob}, address={address}, range={start_date} to {end_date}")
+
+        # 2. ISOLATED Field Filters (avoid cross-matching)
+        if name:
+            # ONLY search the patient_name column. This prevents "New York" from matching James Rivera.
+            query = query.filter(ConversionLog.patient_name.ilike(f"%{name}%"))
+        
+        if dob:
+            # Use SQLAlchemy's native cast+ilike — generates proper parameterized SQL.
+            # Searches the 'birthDate' key specifically inside the JSONB text so
+            # encounter/observation dates do NOT accidentally match.
+            dob_pattern = f'%"birthDate": "{dob}%'
+            query = query.filter(cast(ConversionLog.fhir_bundle, Text).ilike(dob_pattern))
+
+        if address:
+            # Use SQLAlchemy's native cast+ilike — generates proper parameterized SQL.
+            # Searches the entire FHIR bundle JSON for the city/address string.
+            query = query.filter(cast(ConversionLog.fhir_bundle, Text).ilike(f"%{address}%"))
+
+        logs = query.order_by(ConversionLog.converted_at.desc()).limit(200).all()
+
+        # Group by patient — use MRN+name composite key so different patients
+        # never collapse together even when MRN is missing or identical across samples.
+        from collections import OrderedDict
+
+        def _group_key(log):
+            mrn = (log.patient_mrn or "").strip()
+            name = (log.patient_name or "").strip().upper()
+            # If we have a real MRN (not UNKNOWN / empty), use it alone
+            if mrn and mrn != "UNKNOWN":
+                return mrn
+            # Fallback: use name so two different unknowns stay separate
+            if name:
+                return f"__NAME__{name}"
+            # Last resort: keep the log isolated by its own id
+            return f"__ID__{log.id}"
+
+        patients: dict = OrderedDict()
+        for log in logs:
+            key = _group_key(log)
+            if key not in patients:
+                # Pull patient demographics matching THIS log entry's MRN
+                patient_fhir = {}
+                target_mrn = log.patient_mrn
+                for entry in (log.fhir_bundle or {}).get("entry", []):
+                    res = entry.get("resource", {})
+                    if res.get("resourceType") == "Patient":
+                        # Extract this resource's MRN for matching
+                        curr_mrn = None
+                        for ident in res.get("identifier", []):
+                            if ident.get("value"):
+                                curr_mrn = ident["value"]
+                                break
+                        if not curr_mrn: curr_mrn = res.get("id")
+                        
+                        if curr_mrn == target_mrn:
+                            patient_fhir = res
+                            break
+                
+                # If MRN match failed (e.g. name-based group), fallback to name match
+                if not patient_fhir and log.patient_name:
+                    search_name = log.patient_name.upper()
+                    for entry in (log.fhir_bundle or {}).get("entry", []):
+                        res = entry.get("resource", {})
+                        if res.get("resourceType") == "Patient":
+                            n = res.get("name", [{}])[0]
+                            gn = " ".join(n.get("given", []))
+                            fn = n.get("family", "")
+                            res_name = f"{gn} {fn}".strip().upper()
+                            if res_name == search_name:
+                                patient_fhir = res
+                                break
+
+                # Determine best display MRN and name
+                display_mrn = (log.patient_mrn or "").strip()
+                if not display_mrn or display_mrn == "UNKNOWN":
+                    display_mrn = "—"
+
+                display_name = (log.patient_name or "").strip()
+                if not display_name and patient_fhir.get("name"):
+                    n = patient_fhir["name"][0]
+                    given = " ".join(n.get("given", []))
+                    family = n.get("family", "")
+                    display_name = f"{given} {family}".strip()
+
+                patients[key] = {
+                    "patient_mrn": display_mrn,
+                    "patient_name": display_name or "Unknown Patient",
+                    "patient_data": patient_fhir,
+                    "conversions": []
+                }
+            patients[key]["conversions"].append({
+                "log_id": log.id,
+                "message_type": log.message_type or "—",
+                "conversion_source": log.conversion_source,
+                "converted_at": log.converted_at.isoformat(),
+                "warnings": log.warnings or [],
+                "dq_issues": log.dq_issues or [],
+                "success": log.success,
+            })
+
+        return {"results": list(patients.values())}
+    except Exception as e:
+        logger.error(f"Search history error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+    finally:
+        db.close()
+
+
+@router.get(
+    "/history/log/{log_id}",
+    summary="Retrieve the original clean FHIR bundle from a specific conversion log entry",
+)
+def get_conversion_log_bundle(log_id: str):
+    """Returns the exact original FHIR bundle stored at conversion time — zero modification."""
+    db = SessionLocal()
+    try:
+        log = db.query(ConversionLog).filter(ConversionLog.id == log_id).first()
+        if not log:
+            raise HTTPException(status_code=404, detail="Conversion log entry not found")
+        return {
+            "bundle": log.fhir_bundle,       # original, unmodified FHIR bundle
+            "message_type": log.message_type,
+            "conversion_source": log.conversion_source,
+            "converted_at": log.converted_at.isoformat(),
+            "patient_mrn": log.patient_mrn,
+            "patient_name": log.patient_name,
+            "warnings": log.warnings or [],
+            "dq_issues": log.dq_issues or [],
+            "field_mappings": log.field_mappings or [],
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Get conversion log error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+    finally:
+        db.close()
+
+
+@router.get(
+    "/history/patient/{mrn}",
+    summary="Get cumulative FHIR resource store for a patient MRN (filtered by resource_type if given)",
+)
+def get_patient_bundle(mrn: str, resource_type: Optional[str] = None):
+    """Returns the cumulative FHIR resource store — best used for 'current state' view."""
+    db = SessionLocal()
+    try:
+        query = db.query(FhirResource).filter(FhirResource.patient_mrn == mrn)
+        if resource_type:
+            query = query.filter(FhirResource.resource_type == resource_type)
+        resources = query.all()
+        bundle = {
+            "resourceType": "Bundle",
+            "type": "collection",
+            "entry": [{"resource": r.data} for r in resources],
+        }
+        return {"bundle": bundle, "patient_mrn": mrn}
+    except Exception as e:
+        logger.error(f"Get patient bundle error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+    finally:
+        db.close()

@@ -8,6 +8,7 @@ from pathlib import Path
 from dotenv import load_dotenv
 load_dotenv()
 
+from contextlib import asynccontextmanager
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import HTMLResponse, JSONResponse
@@ -15,6 +16,7 @@ from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 
 from app.api.routes import router
+from app.db.session import engine, Base
 
 # ---------------------------------------------------------------------------
 # Logging
@@ -28,6 +30,37 @@ logger = logging.getLogger(__name__)
 # ---------------------------------------------------------------------------
 # App
 # ---------------------------------------------------------------------------
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    # Initialize Database Tables
+    try:
+        Base.metadata.create_all(bind=engine)
+        logger.info("Database tables verified/created successfully.")
+    except Exception as e:
+        logger.error(f"Failed to create database tables: {e}")
+
+    # Safe column migration: add new columns if they don't exist yet
+    try:
+        from sqlalchemy import text
+        with engine.connect() as conn:
+            for col, coldef in [
+                ("message_type",      "VARCHAR(100)"),
+                ("conversion_source", "VARCHAR(50)"),
+            ]:
+                result = conn.execute(text(
+                    f"SELECT column_name FROM information_schema.columns "
+                    f"WHERE table_name='fhir_resource' AND column_name='{col}'"
+                ))
+                if not result.fetchone():
+                    conn.execute(text(
+                        f"ALTER TABLE fhir_resource ADD COLUMN {col} {coldef}"
+                    ))
+                    logger.info(f"Added column fhir_resource.{col}")
+            conn.commit()
+    except Exception as e:
+        logger.warning(f"Column migration skipped (may be expected on first run): {e}")
+    yield
+
 app = FastAPI(
     title="HL7toFHIR message converter",
     description=(
@@ -39,6 +72,7 @@ app = FastAPI(
     docs_url="/api/docs",
     redoc_url="/api/redoc",
     openapi_url="/api/openapi.json",
+    lifespan=lifespan,
 )
 
 # CORS — permissive for local dev; tighten in production

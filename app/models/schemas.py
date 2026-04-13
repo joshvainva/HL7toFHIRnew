@@ -43,6 +43,8 @@ class ConversionResult(BaseModel):
     hl7_output: Optional[str] = None
     errors: List[str] = []
     warnings: List[str] = []
+    dq_issues: List[Dict[str, Any]] = []
+    upsert_summary: Optional[Dict[str, Any]] = None
 
 
 class FHIRConversionRequest(BaseModel):

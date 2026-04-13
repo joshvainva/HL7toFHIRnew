@@ -561,8 +561,7 @@ document.getElementById('clear-fhir-btn').addEventListener('click', () => {
 // ---------------------------------------------------------------------------
 // History management
 // ---------------------------------------------------------------------------
-refreshHistoryBtn.addEventListener('click', loadHistory);
-clearHistoryBtn.addEventListener('click', clearHistory);
+if (refreshHistoryBtn) refreshHistoryBtn.addEventListener('click', loadHistory);
 
 // Load history when history tab is activated
 document.querySelectorAll('.input-tabs .tab-btn').forEach(btn => {
@@ -1185,23 +1184,24 @@ let outputIsUnmasked = false;
 // otherwise returns the original (masked) FHIR JSON.
 function getEffectiveFhirJson() {
   if (!currentResult || !currentResult.fhir_json) return null;
-  if (!outputIsUnmasked || !phiMap) return currentResult.fhir_json;
-  try {
-    return JSON.parse(applyPhiRestore(JSON.stringify(currentResult.fhir_json)));
-  } catch {
-    return currentResult.fhir_json;
+  let bundle = currentResult.fhir_json;
+  if (outputIsUnmasked && phiMap) {
+    try {
+      bundle = JSON.parse(applyPhiRestore(JSON.stringify(currentResult.fhir_json)));
+    } catch (e) {
+      console.warn("Failed to restore PHI for cleaning:", e);
+    }
   }
+  return cleanBundleForDisplay(bundle);
 }
 
 window.toggleUnmask = function() {
   if (!phiMap || !currentResult) return;
   outputIsUnmasked = !outputIsUnmasked;
 
-  const rawJson = JSON.stringify(currentResult.fhir_json, null, 2);
-  const display = outputIsUnmasked ? applyPhiRestore(rawJson) : rawJson;
-
+  const display = getEffectiveFhirJson();
   const jsonEl = document.getElementById('json-output');
-  if (jsonEl) jsonEl.innerHTML = syntaxHighlightJson(display);
+  if (jsonEl) jsonEl.innerHTML = syntaxHighlightJson(JSON.stringify(display, null, 2));
 
   const btn = document.getElementById('unmask-btn');
   if (btn) {
@@ -1447,7 +1447,8 @@ function handleResult(result) {
   }
 
   // JSON
-  const jsonStr = JSON.stringify(result.fhir_json, null, 2);
+  const displayJson = getEffectiveFhirJson();
+  const jsonStr = JSON.stringify(displayJson, null, 2);
   jsonOutput.innerHTML = syntaxHighlightJson(jsonStr);
 
   // XML
@@ -2205,39 +2206,98 @@ function syntaxHighlightJson(json) {
 // ---------------------------------------------------------------------------
 // History functions
 // ---------------------------------------------------------------------------
+let historyDebounceTimer = null;
+
+// Attach event listeners to new filter inputs
+document.getElementById('hist-name-filter')?.addEventListener('input', () => {
+  clearTimeout(historyDebounceTimer);
+  historyDebounceTimer = setTimeout(loadHistory, 300);
+});
+document.getElementById('hist-time-filter')?.addEventListener('change', (e) => {
+  const wrap = document.getElementById('hist-date-range-wrap');
+  if (wrap) wrap.style.display = (e.target.value === 'custom') ? 'flex' : 'none';
+  loadHistory();
+});
+document.getElementById('hist-dob-filter')?.addEventListener('input', () => {
+  clearTimeout(historyDebounceTimer);
+  historyDebounceTimer = setTimeout(loadHistory, 300);
+});
+document.getElementById('hist-addr-filter')?.addEventListener('input', () => {
+  clearTimeout(historyDebounceTimer);
+  historyDebounceTimer = setTimeout(loadHistory, 300);
+});
+document.getElementById('hist-start-date')?.addEventListener('change', loadHistory);
+document.getElementById('hist-end-date')?.addEventListener('change', loadHistory);
+
 async function loadHistory() {
   try {
-    const resp = await fetch(API_BASE + '/api/history');
+    const timeFilter = document.getElementById('hist-time-filter')?.value || '1d';
+    const startDate = document.getElementById('hist-start-date')?.value || '';
+    const endDate = document.getElementById('hist-end-date')?.value || '';
+    const nameStr = document.getElementById('hist-name-filter')?.value || '';
+    const dobStr = document.getElementById('hist-dob-filter')?.value || '';
+    const addrStr = document.getElementById('hist-addr-filter')?.value || '';
+    
+    const params = new URLSearchParams();
+    params.append('time_filter', timeFilter);
+    if (startDate) params.append('start_date', startDate);
+    if (endDate) params.append('end_date', endDate);
+    if (nameStr) params.append('name', nameStr);
+    if (dobStr) params.append('dob', dobStr);
+    if (addrStr) params.append('address', addrStr);
+
+    const resp = await fetch(API_BASE + '/api/history/db/search?' + params.toString());
     const data = await resp.json();
     if (!resp.ok) {
-      throw new Error(data.detail || 'Failed to load history');
+      throw new Error(data.detail || 'Failed to search patients');
     }
-    historyItems = data.history || [];
+    historyItems = data.results || [];
     renderHistory();
   } catch (err) {
-    console.error('Failed to load history:', err);
-    // Show empty state instead of error if fetch succeeded but no history
+    console.error('Failed to search patients:', err);
     historyItems = [];
     renderHistory();
   }
 }
 
 async function clearHistory() {
-  if (!confirm('Are you sure you want to clear all conversion history?')) {
-    return;
+  // UI Clear now resets the filter inputs
+  const n = document.getElementById('hist-name-filter'); if (n) n.value = '';
+  const d = document.getElementById('hist-dob-filter'); if (d) d.value = '';
+  const a = document.getElementById('hist-addr-filter'); if (a) a.value = '';
+  const sd = document.getElementById('hist-start-date'); if (sd) sd.value = '';
+  const ed = document.getElementById('hist-end-date'); if (ed) ed.value = '';
+  const tf = document.getElementById('hist-time-filter'); 
+  if (tf) {
+    tf.value = '1d';
+    const wrap = document.getElementById('hist-date-range-wrap');
+    if (wrap) wrap.style.display = 'none';
   }
+  loadHistory();
+}
 
-  try {
-    const resp = await fetch(API_BASE + '/api/history', { method: 'DELETE' });
-    if (!resp.ok) {
-      throw new Error('Failed to clear history');
-    }
-    historyItems = [];
-    renderHistory();
-  } catch (err) {
-    console.error('Failed to clear history:', err);
-    alert('Failed to clear history');
-  }
+// Map FHIR resource types to friendly display labels
+const RESOURCE_TYPE_LABELS = {
+  Patient:             'Patient Demographics',
+  Encounter:           'Encounter / Visit',
+  Observation:         'Lab Results / Vitals',
+  DiagnosticReport:    'Diagnostic Report',
+  AllergyIntolerance:  'Allergies',
+  Condition:           'Conditions / Diagnoses',
+  Procedure:           'Procedures',
+  MedicationRequest:   'Medication Orders',
+  MedicationStatement: 'Medications',
+  Immunization:        'Immunizations',
+  Coverage:            'Insurance / Coverage',
+  Organization:        'Organization',
+  Practitioner:        'Practitioner',
+  RelatedPerson:       'Related Person / NOK',
+  ServiceRequest:      'Orders',
+  ClinicalImpression:  'Clinical Notes',
+};
+
+function friendlyType(t) {
+  return RESOURCE_TYPE_LABELS[t] || t;
 }
 
 function renderHistory() {
@@ -2245,53 +2305,96 @@ function renderHistory() {
     historyList.innerHTML = `
       <div class="history-empty">
         <span>📋</span>
-        <p>No conversion history yet. Convert some HL7 messages to see them here.</p>
+        <p>No patients found matching your search criteria.</p>
       </div>
     `;
     return;
   }
 
-  const html = historyItems.map(item => {
-    const date = new Date(item.timestamp).toLocaleString();
-    const statusClass = item.success ? 'history-success' : 'history-error';
-    const statusIcon = item.success ? '✓' : '✗';
-    const inputDesc = item.input_type === 'file' && item.input_name ?
-      `File: ${escapeHtml(item.input_name)}` : 'Text input';
-    const isFhirDir = (item.direction || 'hl7_to_fhir') === 'fhir_to_hl7';
-    const dirLabel = isFhirDir ? 'FHIR→HL7' : 'HL7→FHIR';
+  const SOURCE_COLORS = {
+    'HL7→FHIR':        { bg:'rgba(59,130,246,0.15)',  color:'#3b82f6', border:'rgba(59,130,246,0.35)' },
+    'HL7→FHIR (AI)':   { bg:'rgba(139,92,246,0.15)', color:'#8b5cf6', border:'rgba(139,92,246,0.35)' },
+    'EHR→FHIR':        { bg:'rgba(16,185,129,0.15)', color:'#10b981', border:'rgba(16,185,129,0.35)' },
+    'EHR→FHIR (AI)':   { bg:'rgba(16,185,129,0.2)',  color:'#059669', border:'rgba(16,185,129,0.35)' },
+    'FHIR→HL7':        { bg:'rgba(245,158,11,0.15)', color:'#f59e0b', border:'rgba(245,158,11,0.35)' },
+  };
+
+  function srcChip(src) {
+    const s = SOURCE_COLORS[src] || { bg:'rgba(107,114,128,0.15)', color:'#6b7280', border:'rgba(107,114,128,0.3)' };
+    return `<span style="padding:2px 7px; border-radius:10px; font-size:0.72rem;
+      background:${s.bg}; color:${s.color}; border:1px solid ${s.border}; white-space:nowrap;">${src}</span>`;
+  }
+
+  const html = historyItems.map((item) => {
+    const p = item.patient_data || {};
+    const mrn = item.patient_mrn;
+    const conversions = item.conversions || [];
+
+    // Patient name — from ConversionLog.patient_name or FHIR data
+    let displayName = item.patient_name || '';
+    if (!displayName && p.name && p.name[0]) {
+      const n = p.name[0];
+      displayName = [(n.given || []).join(' '), n.family].filter(Boolean).join(' ');
+    }
+    displayName = displayName || 'Unknown Patient';
+
+    const dob = p.birthDate || '—';
+    const gender = p.gender ? ` · ${p.gender.charAt(0).toUpperCase() + p.gender.slice(1)}` : '';
+    let addrStr = '';
+    if (p.address && p.address[0]) {
+      const a = p.address[0];
+      addrStr = [(a.line || []).join(' '), a.city, a.state].filter(Boolean).join(', ');
+    }
+
+    // Individual audit rows — one per conversion event
+    const convRows = conversions.map(c => {
+      const ts = new Date(c.converted_at).toLocaleString();
+      const warnBadge = (c.warnings || []).length
+        ? `<span style="color:#f59e0b;font-size:0.72rem;margin-left:6px;">⚠ ${c.warnings.length} warning(s)</span>` : '';
+      const dqBadge = (c.dq_issues || []).length
+        ? `<span style="color:#ef4444;font-size:0.72rem;margin-left:6px;">🔍 ${c.dq_issues.length} DQ issue(s)</span>` : '';
+      return `
+        <tr style="border-top:1px solid var(--border);">
+          <td style="padding:6px 8px; font-size:0.82rem; font-family:monospace; white-space:nowrap;">${escapeHtml(c.message_type)}</td>
+          <td style="padding:6px 8px;">${srcChip(c.conversion_source)}</td>
+          <td style="padding:6px 8px; font-size:0.8rem; color:var(--text-muted); white-space:nowrap;">${escapeHtml(ts)}${warnBadge}${dqBadge}</td>
+          <td style="padding:6px 8px; text-align:right;">
+            <button onclick="loadLogBundle('${c.log_id}','${escapeHtml(c.message_type)}','${escapeHtml(c.conversion_source)}')"
+              style="background:var(--primary); color:white; border:none; padding:4px 12px; border-radius:5px; cursor:pointer; font-size:0.78rem; white-space:nowrap;">
+              📂 View
+            </button>
+          </td>
+        </tr>`;
+    }).join('');
 
     return `
-      <div class="history-item ${statusClass}" data-id="${item.id}">
-        <div class="history-header">
-          <div class="history-meta">
-            <span class="history-date">${date}</span>
-            <span class="history-dir">${dirLabel}</span>
-            <span class="history-type">${escapeHtml(item.message_type || '?')}${item.message_event ? '^' + escapeHtml(item.message_event) : ''}</span>
-            <span class="history-input">${inputDesc}</span>
+      <div class="history-item history-success" data-mrn="${mrn}" style="padding:14px 16px;">
+        <div style="display:flex; justify-content:space-between; align-items:flex-start; flex-wrap:wrap; gap:8px; margin-bottom:10px;">
+          <div>
+            <div style="font-weight:700; font-size:1.05rem; color:var(--text);">👤 ${escapeHtml(displayName)}${gender}</div>
+            <div style="font-size:0.82rem; color:var(--text-muted); margin-top:2px;">
+              <strong>MRN:</strong> <span class="mono">${escapeHtml(mrn)}</span>
+              &nbsp;·&nbsp;<strong>DOB:</strong> ${escapeHtml(dob)}
+              ${addrStr ? `&nbsp;·&nbsp;<strong>Location:</strong> ${escapeHtml(addrStr)}` : ''}
+            </div>
           </div>
-          <div class="history-status">
-            <span class="status-icon">${statusIcon}</span>
-            <span class="status-text">${item.success ? 'Success' : 'Failed'}</span>
+          <div style="font-size:0.78rem; color:var(--text-muted); text-align:right;">
+            ${conversions.length} conversion record${conversions.length !== 1 ? 's' : ''}
           </div>
         </div>
-        <div class="history-actions">
-          <button class="history-btn" onclick="loadHistoryItem('${item.id}')">Load</button>
-          ${item.success && !isFhirDir ? `
-            <button class="history-btn" onclick="copyHistoryOutput('${item.id}', 'json')">Copy JSON</button>
-            <button class="history-btn" onclick="downloadHistoryOutput('${item.id}', 'json')">Download JSON</button>
-            <button class="history-btn" onclick="copyHistoryOutput('${item.id}', 'xml')">Copy XML</button>
-            <button class="history-btn" onclick="downloadHistoryOutput('${item.id}', 'xml')">Download XML</button>
-          ` : ''}
-          ${item.success && isFhirDir ? `
-            <button class="history-btn" onclick="copyHistoryOutput('${item.id}', 'hl7out')">Copy HL7</button>
-            <button class="history-btn" onclick="downloadHistoryOutput('${item.id}', 'hl7out')">Download HL7</button>
-          ` : ''}
+        <div style="overflow-x:auto;">
+          <table style="width:100%; border-collapse:collapse; font-size:0.82rem;">
+            <thead>
+              <tr style="text-transform:uppercase; font-size:0.68rem; color:var(--text-muted); letter-spacing:0.05em;">
+                <th style="padding:4px 8px; text-align:left; font-weight:600;">Message Type</th>
+                <th style="padding:4px 8px; text-align:left; font-weight:600;">Conversion</th>
+                <th style="padding:4px 8px; text-align:left; font-weight:600;">Date &amp; Time</th>
+                <th style="padding:4px 8px; text-align:right; font-weight:600;">Action</th>
+              </tr>
+            </thead>
+            <tbody>${convRows}</tbody>
+          </table>
         </div>
-        ${item.errors && item.errors.length > 0 ? `
-          <div class="history-errors">
-            ${item.errors.map(err => `<div class="history-error-item">${escapeHtml(err)}</div>`).join('')}
-          </div>
-        ` : ''}
       </div>
     `;
   }).join('');
@@ -2299,50 +2402,95 @@ function renderHistory() {
   historyList.innerHTML = html;
 }
 
-async function loadHistoryItem(itemId) {
+/**
+ * Strip fields that are added synthetically by the FHIR mapper
+ * and were NOT present in the original HL7 / EHR message.
+ */
+function cleanBundleForDisplay(bundle) {
+  if (!bundle) return bundle;
+  console.log("CLEANING_JSON_V3 - Running...");
+  const clean = JSON.parse(JSON.stringify(bundle));
+  
+  const sanitize = (obj) => {
+    if (!obj || typeof obj !== 'object') return;
+    
+    if (Array.isArray(obj)) {
+      obj.forEach(sanitize);
+      return;
+    }
+
+    // Unconditionally remove internal IDs from FHIR resources 
+    // (since human-readable MRNs are in the 'identifier' array)
+    if (obj.resourceType && obj.id) {
+       console.log("Stripping ID from", obj.resourceType);
+       delete obj.id;
+    }
+
+    // Remove technical metadata
+    if (obj.meta) {
+       delete obj.meta;
+    }
+
+    // Recurse
+    Object.values(obj).forEach(sanitize);
+  };
+
+  // Clean top-level Bundle ID
+  delete clean.id;
+  
+  if (Array.isArray(clean.entry)) {
+    clean.entry.forEach(e => {
+      delete e.fullUrl;
+      if (e.resource) sanitize(e.resource);
+    });
+  }
+  return clean;
+}
+
+async function loadLogBundle(logId, messageType, conversionSource) {
   try {
-    const resp = await fetch(`/api/history/${itemId}`);
-    const item = await resp.json();
-    if (!resp.ok) {
-      throw new Error(item.detail || 'Failed to load history item');
-    }
+    const resp = await fetch(API_BASE + `/api/history/log/${logId}`);
+    const data = await resp.json();
+    if (!resp.ok) throw new Error(data.detail || 'Failed to load conversion');
 
-    // Restore direction and input content
-    const itemDir = item.direction || 'hl7_to_fhir';
-    if (itemDir !== conversionDirection) {
-      setDirection(itemDir);
-    }
     document.getElementById('in-tab-text').click();
-    if (itemDir === 'fhir_to_hl7') {
-      document.getElementById('fhir-input').value = item.fhir_json
-        ? JSON.stringify(item.fhir_json, null, 2)
-        : '';
-    } else {
-      hl7Input.value = item.hl7_content || '';
-    }
 
-    // If successful, show the result
-    if (item.success) {
-      handleResult({
-        success: true,
-        direction: itemDir,
-        hl7_version: item.hl7_version,
-        message_type: item.message_type,
-        message_event: item.message_event,
-        fhir_json: item.fhir_json,
-        fhir_xml: item.fhir_xml,
-        human_readable: item.human_readable,
-        hl7_output: item.hl7_output,
-        warnings: item.warnings || [],
-        resource_summary: [],
-        field_mappings: item.field_mappings || [],
-      });
-    }
+    const displayBundle = cleanBundleForDisplay(data.bundle);
+
+    handleResult({
+      success: true,
+      direction: data.conversion_source.toLowerCase().includes('fhir_to_hl7') ? 'fhir_to_hl7' : 
+                 (data.conversion_source.toLowerCase().includes('ehr') ? 'ehr_to_fhir' : 'hl7_to_fhir'),
+      message_type: data.message_type || 'EHR',
+      fhir_json: displayBundle,
+      hl7_output: '',
+      warnings: data.warnings || [],
+      resource_summary: (data.bundle && data.bundle.entry || []).map(e => {
+        const r = e.resource || {};
+        let desc = r.id || '';
+        if (r.resourceType === 'Patient' && r.name && r.name[0]) {
+            const n = r.name[0];
+            desc = [n.family, ...(n.given || [])].filter(Boolean).join(', ');
+        } else if (r.code && r.code.text) {
+            desc = r.code.text;
+        }
+        return {
+          resource_type: r.resourceType || 'Unknown',
+          resource_id: r.id || '',
+          description: desc
+        };
+      }),
+      field_mappings: data.field_mappings || []
+    });
+
+    outputPanel.scrollIntoView({ behavior: 'smooth' });
   } catch (err) {
-    console.error('Failed to load history item:', err);
-    alert('Failed to load history item');
+    console.error('Failed to load conversion log:', err);
+    alert('Failed to load this conversion record');
   }
 }
+
+
 
 function copyHistoryOutput(itemId, format) {
   const item = historyItems.find(h => h.id === itemId);
@@ -2371,7 +2519,8 @@ function downloadHistoryOutput(itemId, format) {
   let mimeType = '';
 
   if (format === 'json') {
-    content = JSON.stringify(item.fhir_json, null, 2);
+    const clean = cleanBundleForDisplay(item.fhir_json);
+    content = JSON.stringify(clean, null, 2);
     filename = `fhir_bundle_${item.id}.json`;
     mimeType = 'application/json';
   } else if (format === 'xml') {
