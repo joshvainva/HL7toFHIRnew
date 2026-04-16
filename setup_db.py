@@ -1,5 +1,6 @@
 ﻿import psycopg2
 import os
+from urllib.parse import quote_plus
 from psycopg2.extensions import ISOLATION_LEVEL_AUTOCOMMIT
 
 if __name__ == '__main__':
@@ -34,7 +35,8 @@ if __name__ == '__main__':
         # Remove old DATABASE_URL lines if they exist
         new_lines = [l for l in lines if not l.startswith('DATABASE_URL=')]
         
-        db_url = f'DATABASE_URL=postgresql://postgres:{pw}@localhost:5432/innova_fhir\n'
+        encoded_pw = quote_plus(pw)
+        db_url = f'DATABASE_URL=postgresql://postgres:{encoded_pw}@localhost:5432/innova_fhir\n'
         new_lines.append('\n' + db_url)
         
         with open(env_file, 'w') as f:

@@ -8,6 +8,7 @@ import uuid
 from datetime import datetime, timedelta
 from typing import List, Optional
 from sqlalchemy import cast, String
+from sqlalchemy.exc import SQLAlchemyError
 
 # Load .env so GROQ_API_KEY is available without python-dotenv dependency
 _env_path = os.path.join(os.path.dirname(__file__), "..", "..", ".env")
@@ -741,8 +742,8 @@ async def health():
     description="Retrieve the last 10 conversion attempts with their results.",
 )
 async def get_history():
-    """Get all conversion history items."""
-    return {"history": history.get_all()}
+    """Get all conversion history items from the database."""
+    return search_history(time_filter='all')
 
 
 @router.get(
@@ -751,14 +752,47 @@ async def get_history():
     description="Retrieve a specific conversion from history by ID.",
 )
 async def get_history_item(item_id: str):
-    """Get a specific history item by ID."""
-    item = history.get_by_id(item_id)
-    if not item:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="History item not found",
-        )
-    return item.to_dict()
+    """Get a specific history item by ID from the database."""
+    db = SessionLocal()
+    try:
+        log = db.query(ConversionLog).filter(ConversionLog.id == item_id).first()
+        if not log:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="History item not found",
+            )
+
+        patient_fhir = {}
+        for entry in (log.fhir_bundle or {}).get("entry", []):
+            res = entry.get("resource", {})
+            if res.get("resourceType") == "Patient":
+                patient_fhir = res
+                break
+
+        return {
+            "id": log.id,
+            "timestamp": log.converted_at.isoformat(),
+            "hl7_version": None,
+            "message_type": log.message_type,
+            "message_event": None,
+            "input_type": "database",
+            "input_name": None,
+            "success": log.success == "success",
+            "hl7_content": None,
+            "direction": log.conversion_source or "hl7_to_fhir",
+            "fhir_json": log.fhir_bundle,
+            "fhir_xml": None,
+            "human_readable": None,
+            "field_mappings": log.field_mappings or [],
+            "hl7_output": None,
+            "errors": [],
+            "warnings": log.warnings or [],
+            "patient_name": log.patient_name,
+            "patient_mrn": log.patient_mrn,
+            "patient_data": patient_fhir,
+        }
+    finally:
+        db.close()
 
 
 @router.delete(
@@ -770,6 +804,64 @@ async def clear_history():
     """Clear all conversion history."""
     history.clear()
     return {"message": "History cleared"}
+
+
+def _extract_patient_info_from_bundle(bundle):
+    patient_data = {}
+    patient_mrn = "—"
+    patient_name = None
+
+    if isinstance(bundle, dict):
+        entries = bundle.get("entry", []) if bundle.get("resourceType") == "Bundle" else []
+        for entry in entries:
+            resource = entry.get("resource", {})
+            if resource.get("resourceType") == "Patient":
+                patient_data = resource
+                for identifier in resource.get("identifier", []):
+                    if identifier.get("value"):
+                        patient_mrn = identifier.get("value")
+                        break
+                if patient_mrn == "—" and resource.get("id"):
+                    patient_mrn = resource.get("id")
+                names = resource.get("name", [])
+                if names:
+                    name = names[0]
+                    given = " ".join(name.get("given", []))
+                    family = name.get("family", "")
+                    patient_name = f"{given} {family}".strip()
+                break
+
+    return patient_mrn, patient_name, patient_data
+
+
+def _memory_history_search_results():
+    results = []
+    for item in history.get_all():
+        item_data = item
+        if not isinstance(item_data, dict):
+            item_data = item.to_dict()
+
+        direction = item_data.get("direction")
+        conversion_source = "HL7→FHIR" if direction == "hl7_to_fhir" else direction
+        patient_mrn, patient_name, patient_data = _extract_patient_info_from_bundle(item_data.get("fhir_json") or {})
+        if not patient_name:
+            patient_name = item_data.get("patient_name") or item_data.get("message_type") or "Unknown Patient"
+
+        results.append({
+            "patient_mrn": patient_mrn,
+            "patient_name": patient_name,
+            "patient_data": patient_data,
+            "conversions": [{
+                "log_id": item_data.get("id"),
+                "message_type": item_data.get("message_type") or "—",
+                "conversion_source": conversion_source,
+                "converted_at": item_data.get("timestamp"),
+                "warnings": item_data.get("warnings") or [],
+                "dq_issues": item_data.get("dq_issues") or [],
+                "success": item_data.get("success"),
+            }],
+        })
+    return results
 
 
 @router.get(
@@ -871,26 +963,26 @@ def search_history(
                             break
                 
                 # If MRN match failed (e.g. name-based group), fallback to name match
-                if not patient_fhir and log.patient_name:
-                    search_name = log.patient_name.upper()
+                if not patient_fhir:
+                    # Fallback to any Patient resource in the bundle
                     for entry in (log.fhir_bundle or {}).get("entry", []):
                         res = entry.get("resource", {})
                         if res.get("resourceType") == "Patient":
-                            n = res.get("name", [{}])[0]
-                            gn = " ".join(n.get("given", []))
-                            fn = n.get("family", "")
-                            res_name = f"{gn} {fn}".strip().upper()
-                            if res_name == search_name:
-                                patient_fhir = res
-                                break
+                            patient_fhir = res
+                            break
 
                 # Determine best display MRN and name
                 display_mrn = (log.patient_mrn or "").strip()
-                if not display_mrn or display_mrn == "UNKNOWN":
-                    display_mrn = "—"
+                if (not display_mrn or display_mrn == "UNKNOWN") and patient_fhir:
+                    for identifier in patient_fhir.get("identifier", []):
+                        if identifier.get("value"):
+                            display_mrn = identifier.get("value")
+                            break
+                    if not display_mrn and patient_fhir.get("id"):
+                        display_mrn = patient_fhir.get("id")
 
                 display_name = (log.patient_name or "").strip()
-                if not display_name and patient_fhir.get("name"):
+                if not display_name and patient_fhir and patient_fhir.get("name"):
                     n = patient_fhir["name"][0]
                     given = " ".join(n.get("given", []))
                     family = n.get("family", "")
