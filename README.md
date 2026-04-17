@@ -2,7 +2,7 @@
 
 **Innova Solutions | Healthcare Interoperability Platform**
 
-A production-ready web application that converts **HL7 v2.x messages**, **raw EHR pipe-delimited data**, and **FHIR R4 bundles** into each other — with rule-based and AI-powered conversion modes, PHI masking, multi-patient batch support, and rich export options.
+A production-ready web application that converts **HL7 v2.x messages**, **raw EHR pipe-delimited data**, and **FHIR R4 bundles** into each other — with rule-based and AI-powered conversion modes, FHIR R4 compliance validation, PHI masking, multi-patient batch support, and rich export options.
 
 ---
 
