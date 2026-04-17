@@ -59,6 +59,17 @@ Subsequent starts: ~5 seconds.
 
 Open your browser: **http://localhost:8000**
 
+#### Run the Docker image directly
+
+If you want to run the application from the built image without Compose:
+
+```bash
+docker build -t hl7-fhir-converter:2.0.0 .
+docker run -p 8000:8000 --env-file .env hl7-fhir-converter:2.0.0
+```
+
+This starts the same production image inside a single container.
+
 ---
 
 ## Stopping the App

@@ -109,12 +109,23 @@ cd HL7toFHIRnew
 # 2. Set up API keys
 cp .env.example .env
 # Edit .env and add your ANTHROPIC_API_KEY and/or GROQ_API_KEY
-
-# 3. Build and run
-docker compose up --build
-
-# Open browser to: http://localhost:8000
 ```
+
+#### Run with Docker Compose
+
+```bash
+docker compose up --build
+```
+
+#### Or build and run the Docker image directly
+
+```bash
+docker build -t hl7-fhir-converter:2.0.0 .
+docker run -p 8000:8000 --env-file .env hl7-fhir-converter:2.0.0
+```
+
+Open browser to: `http://localhost:8000`
+
 *Docker handles all dependencies and the PostgreSQL database setup automatically.*
 
 ### Option B — Local Python
